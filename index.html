@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <title>OrganizeALot Residential Inspection Assistant</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <div class="eyebrow">OrganizeALot</div>
+      <h1>Residential Inspection Assistant</h1>
+    </div>
+    <button id="installBtn" class="ghost hidden" type="button">Install</button>
+  </header>
+
+  <main>
+    <section class="card warning" id="storageWarning">
+      <strong>Residential Phone App Version 1.8</strong>
+      <p>This residential-focused version saves inspections/photos on this device using browser storage. Export a ZIP when you finish an inspection.</p>
+    </section>
+
+    <nav class="tabs" aria-label="App sections">
+      <button class="tab active" data-tab="details">Job</button>
+      <button class="tab" data-tab="photos">Photos</button>
+      <button class="tab" data-tab="sketch">Sketch</button>
+      <button class="tab" data-tab="saved">Saved</button>
+      <button class="tab" data-tab="settings">Settings</button>
+    </nav>
+
+    <section class="panel active" id="details">
+      <div class="card">
+        <h2>Current Inspection</h2>
+        <div class="row">
+          <button id="newInspectionBtn" class="primary" type="button">New Inspection</button>
+          <button id="saveInspectionBtn" type="button">Save</button>
+        </div>
+        <label>Company / destination folder
+          <input id="company" placeholder="NIIS, USAA, Personal, etc.">
+        </label>
+        <label>Workflow
+          <select id="workflow">
+            <option>Residential</option>
+            <option>Apartment</option>
+            <option>USAA</option>
+          </select>
+        </label>
+        <label>Inspection ID #
+          <input id="inspectionId" placeholder="Inspection ID">
+        </label>
+        <label>Insured / Job Name
+          <input id="insuredName" placeholder="Insured name or job name">
+        </label>
+        <label>Address
+          <input id="address" placeholder="Street address">
+        </label>
+        <div class="grid2">
+          <label>City
+            <input id="city" placeholder="City">
+          </label>
+          <label>State
+            <input id="state" value="OH">
+          </label>
+        </div>
+        <div class="grid2">
+          <label>ZIP
+            <input id="zip" inputmode="numeric" placeholder="43310">
+          </label>
+          <label>Year Built
+            <input id="yearBuilt" inputmode="numeric" placeholder="Year">
+          </label>
+        </div>
+        <div class="grid2">
+          <label>Roof Age
+            <input id="roofAge" placeholder="Age / unknown">
+          </label>
+          <label>HVAC Age
+            <input id="hvacAge" placeholder="Age / unknown">
+          </label>
+        </div>
+        <label>Electric
+          <input id="electric" placeholder="Breaker/fuse, amps, condition">
+        </label>
+        <label>Notes
+          <textarea id="notes" rows="4" placeholder="Important notes, hazards, access issues, no GPS, etc."></textarea>
+        </label>
+      </div>
+
+      <div class="card">
+        <h2>Export</h2>
+        <p class="small">Creates folders by company, inspection ID/address, and photo category.</p>
+        <div class="row">
+          <button id="exportZipBtn" class="primary" type="button">Create Organized ZIP</button>
+          <button id="deleteInspectionBtn" class="danger" type="button">Delete Current</button>
+        </div>
+        <div id="exportStatus" class="status"></div>
+      </div>
+    </section>
+
+    <section class="panel" id="photos">
+      <div class="card">
+        <h2>Photo Capture</h2>
+        <p class="small">Tap a category, take or choose photos, and the app stores GPS/date info when available.</p>
+        <label>Photo note / item
+          <input id="photoNote" placeholder="Example: front elevation, panel, water heater">
+        </label>
+        <div id="categoryButtons" class="category-list"></div>
+        <input id="photoInput" class="hidden" type="file" accept="image/*" capture="environment" multiple>
+      </div>
+
+      <div class="card">
+        <h2>Required Photo Progress</h2>
+        <div id="requiredPhotoProgress" class="progress-box">Required photos: 0 / 0 done</div>
+      </div>
+
+      <div class="card">
+        <h2>Exact Residential Photo List</h2>
+        <p class="small">Use the + Photo button beside each required shot. The button turns green after that picture is taken.</p>
+        <div id="checklist"></div>
+      </div>
+
+      <div class="card">
+        <h2>Photos in Current Inspection</h2>
+        <div id="photoCount" class="status"></div>
+        <div id="photoGallery" class="gallery"></div>
+      </div>
+    </section>
+
+
+    
+    <section class="panel" id="sketch">
+      <div class="card">
+        <h2>Measurement Sketch Builder</h2>
+        <p class="small">Enter a wall length, then tap a direction button. Use diagonal buttons for angled walls. The builder draws straight measured lines and labels each side.</p>
+
+        <div class="grid2">
+          <label>Wall length
+            <input id="measureLength" type="number" inputmode="decimal" min="0" step="0.5" placeholder="Example: 24">
+          </label>
+          <label>Units
+            <select id="measureUnit">
+              <option value="ft" selected>Feet</option>
+              <option value="in">Inches</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="direction-pad" aria-label="Directional measurement controls">
+          <button type="button" data-dir="nw">↖</button>
+          <button type="button" data-dir="n">↑</button>
+          <button type="button" data-dir="ne">↗</button>
+          <button type="button" data-dir="w">←</button>
+          <button id="closeShapeBtn" type="button">Close</button>
+          <button type="button" data-dir="e">→</button>
+          <button type="button" data-dir="sw">↙</button>
+          <button type="button" data-dir="s">↓</button>
+          <button type="button" data-dir="se">↘</button>
+        </div>
+
+        <details class="angle-box">
+          <summary>Custom angled wall</summary>
+          <div class="grid2">
+            <label>Angle degrees
+              <input id="customAngle" type="number" inputmode="decimal" step="1" value="45" placeholder="45">
+            </label>
+            <label>Direction style
+              <select id="angleMode">
+                <option value="standard" selected>0° is right, 90° is up</option>
+                <option value="bearing">Bearing: 0° north, 90° east</option>
+              </select>
+            </label>
+          </div>
+          <button id="addCustomAngleBtn" type="button">Add Custom Angle</button>
+        </details>
+
+        <div class="sketch-toolbar">
+          <button id="undoMeasureBtn" type="button">Undo</button>
+          <button id="resetMeasureBtn" class="danger" type="button">Reset</button>
+          <button id="centerSketchBtn" type="button">Center/Fit</button>
+          <button id="saveSketchBtn" class="primary" type="button">Save Sketch</button>
+        </div>
+
+        <div class="sketch-wrap">
+          <canvas id="houseSketchCanvas" width="1000" height="760" aria-label="Measurement house sketch drawing area"></canvas>
+        </div>
+
+        <div id="measurementSummary" class="measurement-summary">No measurements yet.</div>
+
+        <label>Sketch notes
+          <textarea id="sketchNotes" rows="3" placeholder="Example: front faces street, garage left, measurements approximate, rear addition, etc."></textarea>
+        </label>
+
+        <div class="row">
+          <button id="downloadSketchBtn" type="button">Download Sketch PNG</button>
+          <button id="exportMeasurementsBtn" type="button">Download Measurements TXT</button>
+        </div>
+        <div id="sketchStatus" class="status"></div>
+      </div>
+    </section>
+
+    <section class="panel" id="saved">
+      <div class="card">
+        <h2>Saved Inspections</h2>
+        <button id="refreshSavedBtn" type="button">Refresh List</button>
+        <div id="savedList" class="saved-list"></div>
+      </div>
+    </section>
+
+    <section class="panel" id="settings">
+      <div class="card">
+        <h2>App Settings</h2>
+        <label>Default company / destination
+          <input id="defaultCompany" placeholder="NIIS">
+        </label>
+        <label>
+          <input id="autoLocation" type="checkbox" checked>
+          Ask for GPS when adding photos
+        </label>
+        <label>
+          <input id="useExifFirst" type="checkbox" checked>
+          Use photo EXIF GPS/date first when available
+        </label>
+        <label>
+          <input id="autoEnhancePhotos" type="checkbox" checked>
+          Automatically adjust inspection photos
+        </label>
+        <label>
+          <input id="qualityCheckPhotos" type="checkbox" checked>
+          Check photo quality before saving
+        </label>
+        <label>Adjustment strength
+          <select id="enhanceStrength">
+            <option value="light">Light</option>
+            <option value="medium" selected>Medium</option>
+            <option value="strong">Strong shade fix</option>
+          </select>
+        </label>
+        <p class="small">This brightens dark/shaded areas, protects bright areas, and tries to preserve roof shingle detail so shingles do not get washed out or distorted.</p>
+        <button id="saveSettingsBtn" class="primary" type="button">Save Settings</button>
+        <div id="settingsStatus" class="status"></div>
+      </div>
+
+      <div class="card">
+        <h2>Reset</h2>
+        <p class="small">Use only if you want to clear this phone/browser copy.</p>
+        <button id="clearAllBtn" class="danger" type="button">Clear All App Data</button>
+      </div>
+    </section>
+  </main>
+
+
+  <div id="qualityModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="qualityTitle">
+    <div class="modal-card">
+      <h2 id="qualityTitle">Photo Quality Check</h2>
+      <p id="qualityMessage" class="small"></p>
+      <img id="qualityPreview" alt="Photo preview for quality check">
+      <div id="qualityIssues" class="quality-issues"></div>
+      <div class="row">
+        <button id="qualitySaveBtn" type="button">Save Anyway</button>
+        <button id="qualityRetakeBtn" class="danger" type="button">Retake</button>
+        <button id="qualityFixBtn" class="primary" type="button">Auto-fix</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

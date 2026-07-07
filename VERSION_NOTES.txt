@@ -1,0 +1,25 @@
+OrganizeALot Residential Inspection Assistant v1.8
+
+Changes from v1.7:
+- Changed the Sketch tab into a Measurement Sketch Builder.
+- Enter wall length, then tap a direction button.
+- Direction buttons include:
+  - Up, Down, Left, Right
+  - Diagonal angled directions: NE, NW, SE, SW
+- Added Custom Angled Wall option.
+- Added Close, Undo, Reset, Center/Fit, Save Sketch.
+- Labels each wall with its measurement.
+- Calculates approximate perimeter.
+- Export ZIP now includes:
+  - Sketch/measurement-sketch.png
+  - Sketch/measurements.txt
+
+Kept from v1.7:
+- Take picture -> quality check -> Save Anyway / Retake / Auto-fix
+- Roof/shingle detail protection
+- Exact residential required photo list
+- Required photo progress counter
+- Auto-correct sideways/rotated photos
+- Green photo buttons
+- GPS/date reading
+- Organized ZIP export
