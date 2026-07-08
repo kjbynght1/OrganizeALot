@@ -92,12 +92,57 @@ async function buildReview(section){
 }
 function escapeHtml(s){return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 $('reviewBack').onclick=async()=>{await refreshDash();show('dashboard');};
-$('reviewReturn').onclick=async()=>{await openSection(reviewingSection||'exterior');};
-$('reviewContinue').onclick=async()=>{await openSection(pendingTargetSection||'interior');};
+$('reviewReturn').onclick=async()=>{
+  if(reviewingSection==='departure'){ await refreshDash(); show('dashboard'); return; }
+  await openSection(reviewingSection||'exterior');
+};
+$('reviewContinue').onclick=async()=>{
+  if(pendingTargetSection==='departure'){ renderChecks(); show('departure'); return; }
+  await openSection(pendingTargetSection||'interior');
+};
 
-$('departureBtn').onclick=async()=>{if((state.lastSection||'exterior')==='outbuildings'){await startSectionReview('outbuildings','departure'); pendingTargetSection='departure';}else{renderChecks();show('departure');}};
-const oldContinue=()=>{};
-$('reviewContinue').addEventListener('click',async e=>{ if(pendingTargetSection==='departure'){e.stopImmediatePropagation(); renderChecks(); show('departure');} },true);
+$('departureBtn').onclick=async()=>{ await startDepartureReview(); };
+
+async function startDepartureReview(){
+  reviewingSection='departure'; pendingTargetSection='departure';
+  $('reviewTitle').textContent='AI Departure Check';
+  $('reviewBox').innerHTML='<div class="analyzing">🤖 Checking the whole inspection before you leave...</div>';
+  show('aiReview');
+  setTimeout(async()=>{ $('reviewBox').innerHTML=await buildDepartureReview(); },650);
+}
+async function buildDepartureReview(){
+  const photos=await getPhotos();
+  let html=['<div class="score">📋 Final AI departure check</div>'];
+  let totalWarnings=[];
+  for(const section of sectionOrder){
+    const sectionPhotos=photos.filter(p=>p.section===section).length;
+    const min=minimumPhotos[section]||0;
+    let status=sectionPhotos>=min?'✅':'⚠️';
+    html.push(`<h3>${status} ${sectionNames[section]} — ${sectionPhotos} photos</h3>`);
+    if(section==='exterior'){
+      html.push('<div>Check before leaving: front, rear, left, right, roof, meter, HVAC, foundation/porches/decks.</div>');
+      if(sectionPhotos<8) totalWarnings.push('Exterior may need more coverage.');
+      if(sectionPhotos<4) totalWarnings.push('Exterior may be missing one or more sides.');
+    }
+    if(section==='interior'){
+      html.push('<div>Check before leaving: electrical panel, HVAC/furnace, water heater, kitchen, bathrooms, utility/basement if present.</div>');
+      if(sectionPhotos<6) totalWarnings.push('Interior may be missing key system photos.');
+    }
+    if(section==='outbuildings'){
+      html.push('<div>Check before leaving: all detached structures. Large outbuildings need all sides plus roof views.</div>');
+      if(sectionPhotos===0) totalWarnings.push('No outbuilding photos saved. This is OK only if none are present.');
+    }
+  }
+  if(totalWarnings.length){
+    html.push('<h3>⚠️ Review these before you leave</h3><ul>'+totalWarnings.map(w=>`<li>${w}</li>`).join('')+'</ul>');
+  } else {
+    html.push('<h3 class="okText">✅ Looks ready for the manual checklist.</h3>');
+  }
+  html.push('<p class="small">This is OrganizeALot only. It does not add, change, or submit anything in NIIS.</p>');
+  html.push('<p class="small">Tap Continue to open the final manual departure checklist.</p>');
+  state.reviews.departure={ts:new Date().toISOString(),warnings:totalWarnings}; save();
+  return html.join('');
+}
 function renderChecks(){initState(); $('finalNote').value=state.finalNote||''; $('checklists').innerHTML=''; let tpl=$('checkTemplate'); Object.entries(checklist).forEach(([group,items])=>{let n=tpl.content.cloneNode(true); n.querySelector('summary').textContent=group; let box=n.querySelector('.checks'); items.forEach(item=>{let lab=document.createElement('label');lab.className='checkItem';lab.innerHTML=`<input type="checkbox" ${state.checks[item]?'checked':''}><span>${item}</span>`;lab.querySelector('input').onchange=e=>{state.checks[item]=e.target.checked;save();updateReady();}; box.appendChild(lab);}); $('checklists').appendChild(n);}); updateReady();}
 $('finalNote').oninput=()=>{state.finalNote=$('finalNote').value;save();}; $('readyBtn').onclick=updateReady;
 function updateReady(){let missing=Object.entries(state.checks||{}).filter(([k,v])=>!v).map(([k])=>k); let el=$('readyStatus'); if(missing.length){el.className='status bad';el.innerHTML=`🔴 NOT READY<br><small>${missing.slice(0,6).join(', ')}${missing.length>6?'...':''}</small>`;} else {el.className='status ok';el.textContent='🟢 READY TO LEAVE';}}
