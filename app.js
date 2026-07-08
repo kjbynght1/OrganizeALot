@@ -146,7 +146,29 @@ async function buildDepartureReview(){
 function renderChecks(){initState(); $('finalNote').value=state.finalNote||''; $('checklists').innerHTML=''; let tpl=$('checkTemplate'); Object.entries(checklist).forEach(([group,items])=>{let n=tpl.content.cloneNode(true); n.querySelector('summary').textContent=group; let box=n.querySelector('.checks'); items.forEach(item=>{let lab=document.createElement('label');lab.className='checkItem';lab.innerHTML=`<input type="checkbox" ${state.checks[item]?'checked':''}><span>${item}</span>`;lab.querySelector('input').onchange=e=>{state.checks[item]=e.target.checked;save();updateReady();}; box.appendChild(lab);}); $('checklists').appendChild(n);}); updateReady();}
 $('finalNote').oninput=()=>{state.finalNote=$('finalNote').value;save();}; $('readyBtn').onclick=updateReady;
 function updateReady(){let missing=Object.entries(state.checks||{}).filter(([k,v])=>!v).map(([k])=>k); let el=$('readyStatus'); if(missing.length){el.className='status bad';el.innerHTML=`🔴 NOT READY<br><small>${missing.slice(0,6).join(', ')}${missing.length>6?'...':''}</small>`;} else {el.className='status ok';el.textContent='🟢 READY TO LEAVE';}}
-$('exportBtn').onclick=async()=>{let photos=await getPhotos();let summary={inspection:state,photoCounts:Object.fromEntries(Object.keys(sectionNames).map(s=>[sectionNames[s],photos.filter(p=>p.section===s).length])),created:new Date().toISOString()};let blob=new Blob([JSON.stringify(summary,null,2)],{type:'application/json'});let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`OrganizeALot_${state.id||'inspection'}_summary.json`;a.click();};
+async function saveInspectionSummary(){
+  state.finalNote=$('finalNote') ? $('finalNote').value || state.finalNote || '' : state.finalNote || '';
+  state.savedAt=new Date().toISOString();
+  save();
+  let photos=await getPhotos();
+  let missing=Object.entries(state.checks||{}).filter(([k,v])=>!v).map(([k])=>k);
+  let summary={
+    inspection:state,
+    savedStatus: missing.length ? 'SAVED_WITH_MISSING_OR_NOT_APPLICABLE_ITEMS' : 'READY_TO_LEAVE',
+    missingOrNotApplicableItems: missing,
+    note: state.finalNote || '',
+    photoCounts:Object.fromEntries(Object.keys(sectionNames).map(s=>[sectionNames[s],photos.filter(p=>p.section===s).length])),
+    created:new Date().toISOString()
+  };
+  let blob=new Blob([JSON.stringify(summary,null,2)],{type:'application/json'});
+  let a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`OrganizeALot_${state.id||'inspection'}_summary.json`;
+  a.click();
+  alert('Inspection summary saved. Missing items are still listed in the saved file if they were not checked.');
+}
+$('exportBtn').onclick=saveInspectionSummary;
+$('saveInspectionBtn').onclick=saveInspectionSummary;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;$('installBtn').classList.remove('hidden');}); $('installBtn').onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();deferredPrompt=null;$('installBtn').classList.add('hidden');}};
 if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 (function boot(){if(state.id){$('inspectionId').value=state.id;$('address').value=state.address||'';$('insured').value=state.insured||'';$('inspectionType').value=state.type||'Residential';refreshDash();show('dashboard');}})();
