@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#172554" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="styles.css" />
-  <title>OrganizeALot v2.0.2</title>
+  <title>OrganizeALot v2.1</title>
 </head>
 <body>
   <header>
@@ -52,16 +52,26 @@
 
     <section id="capture" class="hidden card">
       <div class="row"><button id="backDash" class="ghost">← Back</button><h2 id="sectionTitle">Section</h2></div>
-      <input id="photoInput" class="hidden" type="file" accept="image/*" capture="environment" multiple>
+      <input id="photoInput" class="hidden" type="file" accept="image/*" capture="environment">
       <button id="takePhoto" class="primary huge">📷 Take Photo</button>
       <button id="addNoteBtn" class="ghost full">✍️ Add Section Note</button>
       <textarea id="sectionNote" class="hidden" placeholder="Example: rear blocked by locked gate"></textarea>
+      <div id="saveToast" class="saveToast hidden">✅ OK — Photo saved</div>
       <div id="thumbs" class="thumbs"></div>
+    </section>
+
+    <section id="aiReview" class="hidden card">
+      <div class="row"><button id="reviewBack" class="ghost">← Back</button><h2 id="reviewTitle">AI Section Review</h2></div>
+      <div id="reviewBox" class="reviewBox">Analyzing...</div>
+      <div class="reviewActions">
+        <button id="reviewReturn" class="ghost full">📷 Return to Section</button>
+        <button id="reviewContinue" class="primary full">➡ Continue</button>
+      </div>
     </section>
 
     <section id="departure" class="hidden card">
       <div class="row"><button id="backDash2" class="ghost">← Back</button><h2>Departure Check</h2></div>
-      <p class="small">Manual v2.0.1 checklist. AI detection comes next.</p>
+      <p class="small">Final field check before you leave. OrganizeALot helps you review; NIIS stays separate.</p>
       <div id="checklists"></div>
       <label>Final note <textarea id="finalNote" placeholder="Anything NIIS/client may ask about..."></textarea></label>
       <button id="readyBtn" class="primary full">Update Ready Status</button>

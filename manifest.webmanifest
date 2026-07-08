@@ -1,1 +1,1 @@
-{"name":"OrganizeALot v2.0","short_name":"OrganizeALot","start_url":"./index.html","display":"standalone","background_color":"#f3f4f6","theme_color":"#172554","icons":[{"src":"icon.svg","sizes":"any","type":"image/svg+xml"}]}
+{"name":"OrganizeALot v2.1","short_name":"OrganizeALot","start_url":"./index.html?v=2.1","display":"standalone","background_color":"#f3f4f6","theme_color":"#172554","icons":[{"src":"icon.svg","sizes":"any","type":"image/svg+xml"}]}
