@@ -3,86 +3,111 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#172554" />
-  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>OrganizeALot 2.0.3 OBS</title>
+  <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="styles.css" />
-  <title>OrganizeALot v2.1.2</title>
 </head>
 <body>
-  <header>
+  <header class="app-header">
     <div>
       <h1>OrganizeALot</h1>
-      <p>Shoot Fast. Leave Confident.</p>
+      <p>Residential Inspection Assistant v2.0.3</p>
     </div>
-    <button id="installBtn" class="ghost hidden">Install</button>
+    <button id="installBtn" class="small hidden">Install</button>
   </header>
 
   <main>
-    <section id="setup" class="card">
-      <h2>New Inspection</h2>
-      <label>Inspection ID <input id="inspectionId" placeholder="NIIS / Inspection ID"></label>
-      <label>Address <input id="address" placeholder="Property address"></label>
-      <div class="mapCheck">
-        <button id="mapCheckBtn" type="button" class="ghost full">🗺️ Check Map / Street View</button>
-        <p class="small">Use this before driving to verify the address is a real structure, not an empty field or wrong GPS point.</p>
+    <section id="menuScreen" class="screen active">
+      <h2>Start Inspection</h2>
+      <div class="grid">
+        <button class="tile" data-type="Residential">🏠<span>Residential</span><small>Full workflow</small></button>
+        <button class="tile" data-type="Apartment">🏢<span>Apartment</span><small>Coming soon</small></button>
+        <button class="tile" data-type="Commercial">🏬<span>Commercial</span><small>Coming soon</small></button>
+        <button class="tile obs" data-type="OBS">🚗<span>OBS</span><small>Observation exterior only</small></button>
       </div>
-      <label>Insured Name <input id="insured" placeholder="Insured name"></label>
-      <label>Inspection Type
-        <select id="inspectionType">
-          <option>Residential</option><option>Apartment</option><option>Commercial</option><option>USAA</option><option>Other</option>
-        </select>
+      <h3>Saved Inspections</h3>
+      <div id="savedList" class="saved-list"></div>
+    </section>
+
+    <section id="setupScreen" class="screen">
+      <button class="back" data-screen="menuScreen">← Back</button>
+      <h2 id="setupTitle">New Inspection</h2>
+      <label>Inspection ID
+        <input id="inspectionId" placeholder="Example: NIIS-12345" autocomplete="off" />
       </label>
-      <button id="startBtn" class="primary">Start / Save Inspection</button>
-    </section>
-
-    <section id="dashboard" class="hidden">
-      <div class="inspectionBar card">
-        <strong id="activeTitle">No inspection</strong>
-        <span id="activeSub"></span>
+      <label>Address
+        <input id="address" placeholder="Property address" autocomplete="street-address" />
+      </label>
+      <label>Inspector
+        <input id="inspector" placeholder="Chris Roberts" autocomplete="name" />
+      </label>
+      <div class="street-card">
+        <div>
+          <strong>Street View / Map Preview</strong>
+          <p>Uses the entered address to open Google Maps for a quick property check.</p>
+        </div>
+        <button id="openMapBtn" class="secondary">Open Map</button>
       </div>
-      <div class="gridBtns">
-        <button class="big sectionBtn" data-section="exterior">🏠<span>House Exterior</span><b id="count-exterior">0</b></button>
-        <button class="big sectionBtn" data-section="interior">🛋️<span>Interior</span><b id="count-interior">0</b></button>
-        <button class="big sectionBtn" data-section="outbuildings">🏚️<span>Outbuildings</span><b id="count-outbuildings">0</b></button>
-        <button class="big danger" id="departureBtn">🤖<span>AI Departure Check</span><b id="statusBadge">AI</b></button>
+      <button id="startBtn" class="primary">Start Inspection</button>
+    </section>
+
+    <section id="dashboardScreen" class="screen">
+      <div class="dash-top">
+        <button class="back" data-screen="menuScreen">← Menu</button>
+        <button id="saveBtn" class="secondary">Save</button>
       </div>
-      <button id="exportBtn" class="ghost full">Export Inspection Summary</button>
-      <button id="resetBtn" class="ghost full">Start Different Inspection</button>
-    </section>
+      <h2 id="dashTitle">Inspection</h2>
+      <p id="dashMeta" class="muted"></p>
 
-    <section id="capture" class="hidden card">
-      <div class="row"><button id="backDash" class="ghost">← Back</button><h2 id="sectionTitle">Section</h2></div>
-      <input id="photoInput" class="hidden" type="file" accept="image/*" capture="environment">
-      <button id="takePhoto" class="primary huge">📷 Take Photo</button>
-      <button id="addNoteBtn" class="ghost full">✍️ Add Section Note</button>
-      <textarea id="sectionNote" class="hidden" placeholder="Example: rear blocked by locked gate"></textarea>
-      <div id="saveToast" class="saveToast hidden">✅ OK — Photo saved</div>
-      <div id="thumbs" class="thumbs"></div>
-    </section>
+      <div class="progress-wrap">
+        <div class="progress-label"><span id="progressText">0/0 complete</span><span id="readyText">Not ready</span></div>
+        <div class="progress"><div id="progressBar"></div></div>
+      </div>
 
-    <section id="aiReview" class="hidden card">
-      <div class="row"><button id="reviewBack" class="ghost">← Back</button><h2 id="reviewTitle">AI Section Review</h2></div>
-      <div id="reviewBox" class="reviewBox">Analyzing...</div>
-      <div class="reviewActions">
-        <button id="reviewReturn" class="ghost full">📷 Return to Section</button>
-        <button id="reviewContinue" class="primary full">➡ Continue</button>
+      <div id="obsNotice" class="notice hidden">
+        <strong>OBS exterior-only workflow.</strong> Interior photos and sketch are hidden for this inspection type.
+      </div>
+
+      <h3>Photo Checklist</h3>
+      <div id="photoList" class="checklist"></div>
+
+      <div class="actions">
+        <button id="takeNextBtn" class="primary">Take Next Photo</button>
+        <button id="departureBtn" class="secondary">AI Departure Check</button>
+        <button id="exportBtn" class="secondary">Export Report</button>
       </div>
     </section>
 
-    <section id="departure" class="hidden card">
-      <div class="row"><button id="backDash2" class="ghost">← Back</button><h2>Departure Check</h2></div>
-      <p class="small">Final field check before you leave. OrganizeALot helps you review; NIIS stays separate.</p>
-      <div id="checklists"></div>
-      <label>Final note <textarea id="finalNote" placeholder="Anything NIIS/client may ask about..."></textarea></label>
-      <button id="readyBtn" class="primary full">Update Ready Status</button>
-      <div id="readyStatus" class="status"></div>
-      <button id="saveInspectionBtn" class="primary full">💾 Save Inspection Summary</button>
-      <p class="small">You can save even when items are missed or impossible to photograph. Put the reason in Final note.</p>
+    <section id="cameraScreen" class="screen">
+      <button class="back" data-screen="dashboardScreen">← Back</button>
+      <h2 id="photoTitle">Photo</h2>
+      <p id="photoHelp" class="muted"></p>
+      <div class="capture-box">
+        <input id="cameraInput" type="file" accept="image/*" capture="environment" />
+        <img id="previewImg" alt="Preview" class="hidden" />
+      </div>
+      <div id="qualityBox" class="quality hidden"></div>
+      <label class="note-label">Photo note / reason if missed
+        <textarea id="photoNote" rows="3" placeholder="Optional note"></textarea>
+      </label>
+      <div class="actions">
+        <button id="okPhotoBtn" class="primary" disabled>OK / Save Photo</button>
+        <button id="retakeBtn" class="secondary">Retake</button>
+        <button id="markMissingBtn" class="warning">Cannot Get Photo</button>
+      </div>
+    </section>
+
+    <section id="reviewScreen" class="screen">
+      <button class="back" data-screen="dashboardScreen">← Dashboard</button>
+      <h2>AI Departure Check</h2>
+      <div id="reviewResults" class="review"></div>
+      <button class="primary" data-screen="dashboardScreen">Done</button>
     </section>
   </main>
 
-  <template id="checkTemplate">
-    <details open class="checkGroup"><summary></summary><div class="checks"></div></details>
+  <template id="savedTemplate">
+    <button class="saved-item"></button>
   </template>
 
   <script src="app.js"></script>

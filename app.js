@@ -1,174 +1,79 @@
-const DB_NAME='organizealot-v2'; const STORE='photos';
-const sectionNames={exterior:'House Exterior',interior:'Interior',outbuildings:'Outbuildings'};
-const sectionOrder=['exterior','interior','outbuildings'];
-const checklist={
-  'House Exterior':['Front','Rear','Left side','Right side','Address verification','Ground roof overview','Elevated / zoom roof view','Electric meter','HVAC exterior','Pool / deck if present'],
-  'Interior':['Kitchen','Living room','Bathrooms','Basement / crawl if present','Electrical panel','Furnace','Water heater','Laundry / utility','Interior hazards if present'],
-  'Outbuildings':['Shed / small outbuilding photos','Garage photos','Barn / pole barn photos','Over 400 sq ft: all sides','Over 400 sq ft: ground roof view','Over 400 sq ft: elevated / zoom roof view']
-};
-const minimumPhotos={exterior:8,interior:6,outbuildings:0};
-let state=JSON.parse(localStorage.getItem('oal-state')||'{}'); let activeSection='exterior'; let deferredPrompt; let pendingTargetSection=null; let reviewingSection=null;
-function save(){localStorage.setItem('oal-state',JSON.stringify(state));}
-function $(id){return document.getElementById(id)}
-function show(id){['setup','dashboard','capture','aiReview','departure'].forEach(x=>$(x).classList.add('hidden'));$(id).classList.remove('hidden');}
-function db(){return new Promise((res,rej)=>{let r=indexedDB.open(DB_NAME,1);r.onupgradeneeded=()=>r.result.createObjectStore(STORE,{keyPath:'id'});r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
-async function putPhoto(p){let d=await db();return new Promise((res,rej)=>{let tx=d.transaction(STORE,'readwrite');tx.objectStore(STORE).put(p);tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});}
-async function getPhotos(){let d=await db();return new Promise((res,rej)=>{let tx=d.transaction(STORE,'readonly');let r=tx.objectStore(STORE).getAll();r.onsuccess=()=>res(r.result.filter(p=>p.inspectionId===state.id));r.onerror=()=>rej(r.error);});}
-async function delPhoto(id){let d=await db();return new Promise((res,rej)=>{let tx=d.transaction(STORE,'readwrite');tx.objectStore(STORE).delete(id);tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});}
-function initState(){ if(!state.checks) state.checks={}; Object.values(checklist).flat().forEach(x=>{ if(state.checks[x]===undefined) state.checks[x]=false; }); if(!state.notes) state.notes={}; if(!state.reviews) state.reviews={}; }
-async function refreshDash(){initState(); $('activeTitle').textContent=state.id?`${state.id} — ${state.address||''}`:'No inspection'; $('activeSub').textContent=state.insured?`Insured: ${state.insured}`:''; let photos=await getPhotos().catch(()=>[]); for(let s of Object.keys(sectionNames)) $('count-'+s).textContent=photos.filter(p=>p.section===s).length; let unchecked=Object.values(state.checks||{}).filter(v=>!v).length; $('statusBadge').textContent=unchecked?'Check':'Ready?';}
-
-function mapQuery(){return encodeURIComponent(($('address').value||state.address||'').trim());}
-function openMapCheck(){const q=mapQuery(); if(!q){ alert('Enter the property address first.'); return; } state.address=$('address').value.trim(); save(); window.open('https://www.google.com/maps/search/?api=1&query='+q,'_blank','noopener');}
-$('mapCheckBtn').onclick=openMapCheck;
-
-$('startBtn').onclick=async()=>{state.id=$('inspectionId').value.trim()||('INS-'+Date.now());state.address=$('address').value.trim();state.insured=$('insured').value.trim();state.type=$('inspectionType').value;initState();save();await refreshDash();show('dashboard');};
-$('resetBtn').onclick=()=>show('setup');
-document.querySelectorAll('.sectionBtn').forEach(b=>b.onclick=async()=>handleSectionTap(b.dataset.section));
-
-async function handleSectionTap(target){
-  initState();
-  const targetIndex=sectionOrder.indexOf(target);
-  const last=state.lastSection||'exterior';
-  const lastIndex=sectionOrder.indexOf(last);
-  if(targetIndex>lastIndex && last!==target){
-    await startSectionReview(last,target);
-  } else {
-    await openSection(target);
-  }
+const OBS_PHOTOS = [
+  ['front','Front','Full front of property. Include roofline if possible.'],
+  ['front_angle','Front Angle','Corner angle showing front and one side.'],
+  ['left','Left Side','Left elevation from front looking back.'],
+  ['rear','Rear','Full rear elevation.'],
+  ['right','Right Side','Right elevation from rear/front as accessible.'],
+  ['roof','Roof','Best visible roof view without unsafe positioning.'],
+  ['address','Address','House number, mailbox, curb, or sign.'],
+  ['outbuildings','Outbuildings','Detached garage, shed, barn, pole barn if present. Optional if none.'],
+  ['damage','Damage / Hazards','Any visible damage, hazards, or concerns. Optional if none.']
+];
+const STANDARD_PHOTOS = [
+  ['front','Front','Exterior front photo.'],['left','Left Side','Exterior left side.'],['rear','Rear','Exterior rear.'],['right','Right Side','Exterior right side.'],['roof','Roof','Roof overview.'],['interior','Interior','Interior photos as required.']
+];
+const state = { current:null, pendingPhoto:null, deferredInstall:null };
+const $ = id => document.getElementById(id);
+const screens = ['menuScreen','setupScreen','dashboardScreen','cameraScreen','reviewScreen'];
+function show(id){ screens.forEach(s=>$(s).classList.toggle('active',s===id)); if(id==='menuScreen') renderSaved(); window.scrollTo(0,0); }
+function uid(){ return 'insp_'+Date.now(); }
+function photosFor(type){ return type==='OBS'?OBS_PHOTOS:STANDARD_PHOTOS; }
+function newInspection(type){
+  state.current = { id:uid(), type, inspectionId:'', address:'', inspector:'Chris Roberts', created:new Date().toISOString(), updated:new Date().toISOString(), photos:{} };
+  photosFor(type).forEach(([key,title,help])=> state.current.photos[key]={key,title,help,status:'open',dataUrl:null,note:'',quality:null});
 }
-async function openSection(s){activeSection=s;state.lastSection=s;save();$('sectionTitle').textContent=sectionNames[s];$('sectionNote').value=state.notes[s]||'';$('sectionNote').classList.add('hidden');await renderThumbs();show('capture');}
-$('takePhoto').onclick=()=>$('photoInput').click();
-$('photoInput').onchange=async e=>{
-  const files=[...e.target.files];
-  if(!files.length){e.target.value='';return;}
-  for(let file of files){let id=Date.now()+'-'+Math.random().toString(36).slice(2);await putPhoto({id,inspectionId:state.id,section:activeSection,name:file.name,ts:new Date().toISOString(),blob:file});}
-  e.target.value='';
-  await renderThumbs(); await refreshDash();
-  confirmSavedThenCamera();
-};
-function confirmSavedThenCamera(){
-  const toast=$('saveToast'); toast.classList.remove('hidden'); toast.textContent='✅ OK — Photo saved';
-  try{navigator.vibrate&&navigator.vibrate(80);}catch(e){}
-  try{new AudioContext().resume().then(()=>{});}catch(e){}
-  setTimeout(()=>{toast.classList.add('hidden'); if(!document.hidden && !$('capture').classList.contains('hidden')) $('photoInput').click();},650);
+function save(){ if(!state.current) return; state.current.updated=new Date().toISOString(); localStorage.setItem(state.current.id,JSON.stringify(state.current)); renderDashboard(); }
+function allInspections(){ return Object.keys(localStorage).filter(k=>k.startsWith('insp_')).map(k=>JSON.parse(localStorage.getItem(k))).sort((a,b)=>new Date(b.updated)-new Date(a.updated)); }
+function renderSaved(){
+ const box=$('savedList'); box.innerHTML=''; const items=allInspections();
+ if(!items.length){ box.innerHTML='<p class="muted">No saved inspections yet.</p>'; return; }
+ items.forEach(item=>{ const b=document.createElement('button'); b.className='saved-item'; b.innerHTML=`<strong>${item.type} — ${item.inspectionId||'No ID'}</strong><br><small>${item.address||'No address'} · ${new Date(item.updated).toLocaleString()}</small>`; b.onclick=()=>{state.current=item; renderDashboard(); show('dashboardScreen');}; box.appendChild(b); });
 }
-async function renderThumbs(){let photos=(await getPhotos()).filter(p=>p.section===activeSection).sort((a,b)=>a.ts.localeCompare(b.ts));$('thumbs').innerHTML='';photos.forEach(p=>{let u=URL.createObjectURL(p.blob);let div=document.createElement('div');div.className='thumb';div.innerHTML=`<button title="delete">×</button><img src="${u}"><small>${new Date(p.ts).toLocaleString()}</small>`;div.querySelector('button').onclick=async()=>{await delPhoto(p.id);renderThumbs();refreshDash();};$('thumbs').appendChild(div);});}
-$('addNoteBtn').onclick=()=>$('sectionNote').classList.toggle('hidden');
-$('sectionNote').oninput=()=>{state.notes[activeSection]=$('sectionNote').value;save();};
-$('backDash').onclick=async()=>{await refreshDash();show('dashboard');}; $('backDash2').onclick=async()=>{await refreshDash();show('dashboard');};
-
-async function startSectionReview(section,target){
-  reviewingSection=section; pendingTargetSection=target;
-  $('reviewTitle').textContent=`AI Review — ${sectionNames[section]}`;
-  $('reviewBox').innerHTML='<div class="analyzing">🤖 Analyzing section photos...</div>';
-  show('aiReview');
-  setTimeout(async()=>{ $('reviewBox').innerHTML=await buildReview(section); },550);
+function renderDashboard(){
+ const c=state.current; if(!c) return; $('dashTitle').textContent=`${c.type} Inspection`; $('dashMeta').textContent=`${c.inspectionId||'No ID'} • ${c.address||'No address'} • ${c.inspector||'Inspector not set'}`;
+ $('obsNotice').classList.toggle('hidden', c.type!=='OBS');
+ const list=$('photoList'); list.innerHTML=''; const photos=Object.values(c.photos); const complete=photos.filter(p=>p.status==='done'||p.status==='missing').length;
+ $('progressText').textContent=`${complete}/${photos.length} complete`; $('readyText').textContent= complete===photos.length?'Ready to export':'Not ready'; $('progressBar').style.width=`${Math.round(complete/photos.length*100)}%`;
+ photos.forEach(p=>{ const row=document.createElement('div'); row.className=`photo-row ${p.status==='done'?'done':p.status==='missing'?'missing':''}`; row.innerHTML=`<div class="status">${p.status==='done'?'✓':p.status==='missing'?'!':'•'}</div><div class="info"><strong>${p.title}</strong><small>${p.status==='done'?'Saved':p.status==='missing'?'Marked unobtainable':p.help}</small></div><button class="secondary">Open</button>`; row.querySelector('button').onclick=()=>openPhoto(p.key); list.appendChild(row); });
 }
-async function buildReview(section){
-  const photos=(await getPhotos()).filter(p=>p.section===section);
-  const count=photos.length; const min=minimumPhotos[section]||0; const note=(state.notes&&state.notes[section])||'';
-  let lines=[]; let warnings=[];
-  lines.push(`<div class="score">${count>=min?'✅':'⚠️'} ${sectionNames[section]} Photos: <b>${count}</b>${min?` / suggested ${min}+`:''}</div>`);
-  if(section==='exterior'){
-    lines.push('<div>AI field check looks for: front, rear, left, right, roof, meter, HVAC, foundation/porch/deck.</div>');
-    if(count<8) warnings.push('Consider more exterior coverage before leaving this section.');
-    if(count<4) warnings.push('You may not have all four sides photographed yet.');
-  }
-  if(section==='interior'){
-    lines.push('<div>AI field check looks for: kitchen, bathrooms, electrical panel, HVAC/furnace, water heater, basement/crawl if needed.</div>');
-    if(count<6) warnings.push('Interior may be missing a system photo such as panel, furnace, or water heater.');
-  }
-  if(section==='outbuildings'){
-    lines.push('<div>AI field check looks for detached structures. Large outbuildings should have all sides plus roof photos.</div>');
-    if(count===0) warnings.push('No outbuilding photos saved. That is OK only if there are no outbuildings.');
-  }
-  if(note) lines.push(`<div class="noteLine">Note saved: ${escapeHtml(note)}</div>`);
-  if(warnings.length){lines.push('<h3>Recommended before continuing</h3><ul>'+warnings.map(w=>`<li>${w}</li>`).join('')+'</ul>');}
-  else {lines.push('<h3 class="okText">✅ Section looks ready to continue.</h3>');}
-  lines.push('<p class="small">OrganizeALot is only your field assistant. It does not change NIIS or submit anything to NIIS.</p>');
-  state.reviews[section]={ts:new Date().toISOString(),photoCount:count,warnings}; save();
-  return lines.join('');
+function firstOpen(){ return Object.values(state.current.photos).find(p=>p.status==='open'); }
+function openPhoto(key){ state.pendingPhoto=key; const p=state.current.photos[key]; $('photoTitle').textContent=p.title; $('photoHelp').textContent=p.help; $('photoNote').value=p.note||''; $('cameraInput').value=''; $('previewImg').classList.add('hidden'); $('qualityBox').className='quality hidden'; $('okPhotoBtn').disabled=!p.dataUrl; if(p.dataUrl){ $('previewImg').src=p.dataUrl; $('previewImg').classList.remove('hidden'); runQuality(p.dataUrl); } show('cameraScreen'); }
+function runQuality(dataUrl){
+ const img=new Image(); img.onload=()=>{
+   const mp=(img.naturalWidth*img.naturalHeight)/1000000; let msg=[], cls='good';
+   if(mp<1){ msg.push('Photo may be low resolution.'); cls='warn'; } else msg.push('Resolution looks usable.');
+   if(img.naturalWidth<img.naturalHeight && ['front','rear','left','right','roof'].includes(state.pendingPhoto)){ msg.push('Portrait photo is OK, but landscape may show more of the structure.'); cls=cls==='good'?'warn':cls; }
+   msg.push('Review for blur, glare, darkness, and sun distortion before pressing OK.');
+   const box=$('qualityBox'); box.className=`quality ${cls}`; box.innerHTML=`<strong>AI quality check</strong><p>${msg.join(' ')}</p>`; box.classList.remove('hidden');
+   state.current.photos[state.pendingPhoto].quality=msg.join(' ');
+ }; img.src=dataUrl;
 }
-function escapeHtml(s){return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
-$('reviewBack').onclick=async()=>{await refreshDash();show('dashboard');};
-$('reviewReturn').onclick=async()=>{
-  if(reviewingSection==='departure'){ await refreshDash(); show('dashboard'); return; }
-  await openSection(reviewingSection||'exterior');
-};
-$('reviewContinue').onclick=async()=>{
-  if(pendingTargetSection==='departure'){ renderChecks(); show('departure'); return; }
-  await openSection(pendingTargetSection||'interior');
-};
-
-$('departureBtn').onclick=async()=>{ await startDepartureReview(); };
-
-async function startDepartureReview(){
-  reviewingSection='departure'; pendingTargetSection='departure';
-  $('reviewTitle').textContent='AI Departure Check';
-  $('reviewBox').innerHTML='<div class="analyzing">🤖 Checking the whole inspection before you leave...</div>';
-  show('aiReview');
-  setTimeout(async()=>{ $('reviewBox').innerHTML=await buildDepartureReview(); },650);
+function readFile(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); }); }
+async function onCamera(e){ const file=e.target.files[0]; if(!file) return; const dataUrl=await readFile(file); const p=state.current.photos[state.pendingPhoto]; p.dataUrl=dataUrl; p.status='preview'; $('previewImg').src=dataUrl; $('previewImg').classList.remove('hidden'); $('okPhotoBtn').disabled=false; runQuality(dataUrl); }
+function nextAfterSave(){ const n=firstOpen(); if(n){ openPhoto(n.key); setTimeout(()=>$('cameraInput').click(),200); } else { save(); renderDashboard(); show('dashboardScreen'); } }
+function departureCheck(){
+ const photos=Object.values(state.current.photos); const missing=photos.filter(p=>p.status==='open'); const marked=photos.filter(p=>p.status==='missing'); const done=photos.filter(p=>p.status==='done');
+ let html=`<div class="notice"><strong>${done.length} photos saved.</strong><br>${missing.length} still open. ${marked.length} marked unobtainable.</div>`;
+ if(missing.length) html+=`<h3>Still needed</h3><ul>${missing.map(p=>`<li>${p.title}</li>`).join('')}</ul>`;
+ if(marked.length) html+=`<h3>Manual overrides</h3><ul>${marked.map(p=>`<li>${p.title}${p.note?': '+p.note:''}</li>`).join('')}</ul>`;
+ html+=`<p class="muted">Before leaving, confirm all four sides, roof, address, and visible outbuildings/damage have either a photo or a note.</p>`;
+ $('reviewResults').innerHTML=html; show('reviewScreen');
 }
-async function buildDepartureReview(){
-  const photos=await getPhotos();
-  let html=['<div class="score">📋 Final AI departure check</div>'];
-  let totalWarnings=[];
-  for(const section of sectionOrder){
-    const sectionPhotos=photos.filter(p=>p.section===section).length;
-    const min=minimumPhotos[section]||0;
-    let status=sectionPhotos>=min?'✅':'⚠️';
-    html.push(`<h3>${status} ${sectionNames[section]} — ${sectionPhotos} photos</h3>`);
-    if(section==='exterior'){
-      html.push('<div>Check before leaving: front, rear, left, right, roof, meter, HVAC, foundation/porches/decks.</div>');
-      if(sectionPhotos<8) totalWarnings.push('Exterior may need more coverage.');
-      if(sectionPhotos<4) totalWarnings.push('Exterior may be missing one or more sides.');
-    }
-    if(section==='interior'){
-      html.push('<div>Check before leaving: electrical panel, HVAC/furnace, water heater, kitchen, bathrooms, utility/basement if present.</div>');
-      if(sectionPhotos<6) totalWarnings.push('Interior may be missing key system photos.');
-    }
-    if(section==='outbuildings'){
-      html.push('<div>Check before leaving: all detached structures. Large outbuildings need all sides plus roof views.</div>');
-      if(sectionPhotos===0) totalWarnings.push('No outbuilding photos saved. This is OK only if none are present.');
-    }
-  }
-  if(totalWarnings.length){
-    html.push('<h3>⚠️ Review these before you leave</h3><ul>'+totalWarnings.map(w=>`<li>${w}</li>`).join('')+'</ul>');
-  } else {
-    html.push('<h3 class="okText">✅ Looks ready for the manual checklist.</h3>');
-  }
-  html.push('<p class="small">This is OrganizeALot only. It does not add, change, or submit anything in NIIS.</p>');
-  html.push('<p class="small">Tap Continue to open the final manual departure checklist.</p>');
-  state.reviews.departure={ts:new Date().toISOString(),warnings:totalWarnings}; save();
-  return html.join('');
+function exportReport(){
+ save(); const c=state.current; const photos=Object.values(c.photos); const report={...c, exported:new Date().toISOString(), photoSummary:photos.map(p=>({title:p.title,status:p.status,note:p.note,quality:p.quality,hasPhoto:!!p.dataUrl}))};
+ const blob=new Blob([JSON.stringify(report,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`OrganizeALot_${c.type}_${c.inspectionId||c.id}.json`; a.click(); URL.revokeObjectURL(a.href);
 }
-function renderChecks(){initState(); $('finalNote').value=state.finalNote||''; $('checklists').innerHTML=''; let tpl=$('checkTemplate'); Object.entries(checklist).forEach(([group,items])=>{let n=tpl.content.cloneNode(true); n.querySelector('summary').textContent=group; let box=n.querySelector('.checks'); items.forEach(item=>{let lab=document.createElement('label');lab.className='checkItem';lab.innerHTML=`<input type="checkbox" ${state.checks[item]?'checked':''}><span>${item}</span>`;lab.querySelector('input').onchange=e=>{state.checks[item]=e.target.checked;save();updateReady();}; box.appendChild(lab);}); $('checklists').appendChild(n);}); updateReady();}
-$('finalNote').oninput=()=>{state.finalNote=$('finalNote').value;save();}; $('readyBtn').onclick=updateReady;
-function updateReady(){let missing=Object.entries(state.checks||{}).filter(([k,v])=>!v).map(([k])=>k); let el=$('readyStatus'); if(missing.length){el.className='status bad';el.innerHTML=`🔴 NOT READY<br><small>${missing.slice(0,6).join(', ')}${missing.length>6?'...':''}</small>`;} else {el.className='status ok';el.textContent='🟢 READY TO LEAVE';}}
-async function saveInspectionSummary(){
-  state.finalNote=$('finalNote') ? $('finalNote').value || state.finalNote || '' : state.finalNote || '';
-  state.savedAt=new Date().toISOString();
-  save();
-  let photos=await getPhotos();
-  let missing=Object.entries(state.checks||{}).filter(([k,v])=>!v).map(([k])=>k);
-  let summary={
-    inspection:state,
-    savedStatus: missing.length ? 'SAVED_WITH_MISSING_OR_NOT_APPLICABLE_ITEMS' : 'READY_TO_LEAVE',
-    missingOrNotApplicableItems: missing,
-    note: state.finalNote || '',
-    photoCounts:Object.fromEntries(Object.keys(sectionNames).map(s=>[sectionNames[s],photos.filter(p=>p.section===s).length])),
-    created:new Date().toISOString()
-  };
-  let blob=new Blob([JSON.stringify(summary,null,2)],{type:'application/json'});
-  let a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download=`OrganizeALot_${state.id||'inspection'}_summary.json`;
-  a.click();
-  alert('Inspection summary saved. Missing items are still listed in the saved file if they were not checked.');
-}
-$('exportBtn').onclick=saveInspectionSummary;
-$('saveInspectionBtn').onclick=saveInspectionSummary;
-window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;$('installBtn').classList.remove('hidden');}); $('installBtn').onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();deferredPrompt=null;$('installBtn').classList.add('hidden');}};
-if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
-(function boot(){if(state.id){$('inspectionId').value=state.id;$('address').value=state.address||'';$('insured').value=state.insured||'';$('inspectionType').value=state.type||'Residential';refreshDash();show('dashboard');}})();
+document.querySelectorAll('.tile').forEach(b=>b.onclick=()=>{newInspection(b.dataset.type); $('setupTitle').textContent=`New ${b.dataset.type} Inspection`; $('inspectionId').value=''; $('address').value=''; $('inspector').value='Chris Roberts'; show('setupScreen');});
+document.querySelectorAll('[data-screen]').forEach(b=>b.onclick=()=>show(b.dataset.screen));
+$('startBtn').onclick=()=>{ const c=state.current; c.inspectionId=$('inspectionId').value.trim(); c.address=$('address').value.trim(); c.inspector=$('inspector').value.trim()||'Chris Roberts'; save(); renderDashboard(); show('dashboardScreen'); };
+$('openMapBtn').onclick=()=>{ const q=encodeURIComponent($('address').value.trim()); if(q) window.open(`https://www.google.com/maps/search/?api=1&query=${q}`,'_blank'); };
+$('takeNextBtn').onclick=()=>{ const p=firstOpen(); if(p) openPhoto(p.key); else departureCheck(); };
+$('cameraInput').addEventListener('change', onCamera);
+$('okPhotoBtn').onclick=()=>{ const p=state.current.photos[state.pendingPhoto]; p.note=$('photoNote').value.trim(); p.status='done'; save(); nextAfterSave(); };
+$('retakeBtn').onclick=()=>{ $('cameraInput').value=''; $('cameraInput').click(); };
+$('markMissingBtn').onclick=()=>{ const p=state.current.photos[state.pendingPhoto]; p.note=$('photoNote').value.trim()||'Photo could not be obtained.'; p.status='missing'; p.dataUrl=null; save(); nextAfterSave(); };
+$('saveBtn').onclick=save; $('departureBtn').onclick=departureCheck; $('exportBtn').onclick=exportReport;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault(); state.deferredInstall=e; $('installBtn').classList.remove('hidden');});
+$('installBtn').onclick=async()=>{ if(state.deferredInstall){ state.deferredInstall.prompt(); state.deferredInstall=null; $('installBtn').classList.add('hidden'); }};
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+renderSaved();
