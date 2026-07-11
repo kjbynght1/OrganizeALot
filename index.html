@@ -84,7 +84,8 @@
       <h2 id="photoTitle">Photo</h2>
       <p id="photoHelp" class="muted"></p>
       <div class="capture-box">
-        <input id="cameraInput" type="file" accept="image/*" capture="environment" />
+        <input id="cameraInput" type="file" accept="image/*" capture="environment" style="display:none" />
+        <button id="launchCameraBtn" class="primary" type="button">📷 Take Photo</button>
         <img id="previewImg" alt="Preview" class="hidden" />
       </div>
       <div id="qualityBox" class="quality hidden"></div>
