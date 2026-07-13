@@ -109,5 +109,5 @@ $('markMissingBtn').onclick=()=>{ const p=state.current.photos[state.pendingPhot
 $('saveBtn').onclick=save; $('departureBtn').onclick=departureCheck; $('exportBtn').onclick=exportReport;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault(); state.deferredInstall=e; $('installBtn').classList.remove('hidden');});
 $('installBtn').onclick=async()=>{ if(state.deferredInstall){ state.deferredInstall.prompt(); state.deferredInstall=null; $('installBtn').classList.add('hidden'); }};
-if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=2.1.0-build-002',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
 renderSaved();
