@@ -20,3 +20,26 @@
 .delete-photo-btn{display:block;width:calc(100% - 24px);margin:12px;background:var(--bad);color:#fff;font-size:15px;padding:11px 12px}
 .photo-loading{padding:24px;text-align:center;color:var(--muted);background:#020617}
 @media(min-width:700px){.taken-photos-gallery{grid-template-columns:repeat(2,minmax(0,1fr))}.taken-photo-image-button img{height:300px;object-fit:cover}}
+
+
+/* Build 010: full departure check with actionable missing and quality review */
+.departure-summary{padding:16px;border-radius:16px;border:1px solid var(--line);margin-bottom:16px}
+.departure-summary strong{display:block;font-size:19px}
+.departure-summary p{margin:6px 0 0;color:var(--muted)}
+.departure-summary.passed{border-color:var(--accent);background:rgba(34,197,94,.08)}
+.departure-summary.needs-attention{border-color:var(--warn);background:rgba(245,158,11,.08)}
+.departure-all-clear{padding:16px;border:1px solid var(--accent);border-radius:16px;background:rgba(34,197,94,.08);margin:12px 0 18px}
+.departure-all-clear p{margin:6px 0 0;color:var(--muted)}
+.departure-issue{padding:14px;border-radius:16px;background:var(--panel);border:1px solid var(--line);margin:10px 0}
+.departure-issue>strong{font-size:17px}
+.departure-issue>p{margin:6px 0 12px;color:var(--muted);line-height:1.4}
+.departure-issue.missing-issue{border-color:var(--warn)}
+.departure-issue.quality-issue{border-color:var(--bad)}
+.departure-issue.marked-issue{border-color:var(--accent2)}
+.departure-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.departure-actions button{width:100%;padding:10px 8px;font-size:14px}
+.departure-footer{margin-top:20px;padding-top:16px;border-top:1px solid var(--line)}
+.departure-footer button{width:100%}
+.departure-save-anyway{background:var(--bad);color:#fff}
+.departure-footer p{font-size:13px;line-height:1.4;text-align:center;margin:8px 0 0}
+@media(max-width:420px){.departure-actions{grid-template-columns:1fr}}

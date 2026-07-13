@@ -52,6 +52,9 @@ function ensurePhotoChecklist(inspection){
   inspection.photos=ordered;
   return inspection;
 }
+function clearDepartureOverride(){
+  if(state.current && state.current.departureOverride) state.current.departureOverride=null;
+}
 function newInspection(type){
   state.current = { id:uid(), type, inspectionId:'', address:'', inspector:'Chris Roberts', created:new Date().toISOString(), updated:new Date().toISOString(), photos:{} };
   photosFor(type).forEach(([key,title,help])=> state.current.photos[key]={key,title,help,status:'open',dataUrl:null,note:'',quality:null});
@@ -141,7 +144,7 @@ function renderDashboard(){
  const photos=Object.values(c.photos);
  const complete=photos.filter(p=>p.status==='done'||p.status==='missing').length;
  $('progressText').textContent=`${complete}/${photos.length} complete`;
- $('readyText').textContent=complete===photos.length?'Ready to export':'Not ready';
+ $('readyText').textContent=complete===photos.length?'Ready to export':c.departureOverride?'Saved with override':'Not ready';
  $('progressBar').style.width=`${Math.round(complete/photos.length*100)}%`;
 
  photos.forEach(p=>{
@@ -245,6 +248,7 @@ async function deletePhoto(key){
  p.hasPhoto=false;
  p.status='open';
  p.quality=null;
+ clearDepartureOverride();
  await removeStoredPhoto(inspectionId,key);
  save();
  renderDashboard();
@@ -440,6 +444,7 @@ async function onCamera(e){
    p.dataUrl=dataUrl;
    p.hasPhoto=true;
    p.status='preview';
+   clearDepartureOverride();
    await storePhoto(state.current.id,state.pendingPhoto,dataUrl);
    $('previewImg').src=dataUrl;
    $('previewImg').classList.remove('hidden');
@@ -465,13 +470,137 @@ function nextAfterSave(){
    show('dashboardScreen');
  }
 }
+function qualityIssueText(p){
+ if(!p.quality || typeof p.quality!=='object') return 'No automatic quality result is saved for this photo.';
+ if(p.quality.pass===false) return p.quality.details || 'The automatic quality check flagged this photo.';
+ return 'Photo quality looks acceptable.';
+}
+function getDepartureGroups(){
+ const photos=Object.values(state.current.photos||{});
+ const open=photos.filter(p=>p.status==='open' || p.status==='preview' || (p.status==='done' && !(p.dataUrl||p.hasPhoto)));
+ const marked=photos.filter(p=>p.status==='missing');
+ const questionable=photos.filter(p=>p.status==='done' && (p.dataUrl||p.hasPhoto) && !p.departureQualityOverride && (!p.quality || typeof p.quality!=='object' || p.quality.pass!==true));
+ const passed=photos.filter(p=>p.status==='done' && (p.dataUrl||p.hasPhoto) && (p.departureQualityOverride || (p.quality && typeof p.quality==='object' && p.quality.pass===true)));
+ return {photos,open,marked,questionable,passed};
+}
+async function markMissingFromDeparture(key){
+ const p=state.current && state.current.photos[key];
+ if(!p) return;
+ p.note=p.note||'Photo could not be obtained or item was not present.';
+ p.status='missing';
+ p.dataUrl=null;
+ p.hasPhoto=false;
+ p.departureQualityOverride=false;
+ clearDepartureOverride();
+ await removeStoredPhoto(state.current.id,key);
+ save();
+ departureCheck();
+}
+function acceptQualityFromDeparture(key){
+ const p=state.current && state.current.photos[key];
+ if(!p) return;
+ p.departureQualityOverride=true;
+ clearDepartureOverride();
+ save();
+ departureCheck();
+}
+function saveDepartureAnyway(){
+ const {open,questionable}=getDepartureGroups();
+ state.current.departureOverride={
+   savedAt:new Date().toISOString(),
+   unresolved:[...open.map(p=>p.key),...questionable.map(p=>p.key)]
+ };
+ save();
+ renderDashboard();
+ show('dashboardScreen');
+}
+function makeDepartureAction(label,className,onClick){
+ const btn=document.createElement('button');
+ btn.type='button';
+ btn.className=className;
+ btn.textContent=label;
+ btn.onclick=onClick;
+ return btn;
+}
 function departureCheck(){
- const photos=Object.values(state.current.photos); const missing=photos.filter(p=>p.status==='open'); const marked=photos.filter(p=>p.status==='missing'); const done=photos.filter(p=>p.status==='done');
- let html=`<div class="notice"><strong>${done.length} photos saved.</strong><br>${missing.length} still open. ${marked.length} marked unobtainable.</div>`;
- if(missing.length) html+=`<h3>Still needed</h3><ul>${missing.map(p=>`<li>${p.title}</li>`).join('')}</ul>`;
- if(marked.length) html+=`<h3>Manual overrides</h3><ul>${marked.map(p=>`<li>${p.title}${p.note?': '+p.note:''}</li>`).join('')}</ul>`;
- html+=`<p class="muted">Before leaving, confirm all four sides, roof, address, and visible outbuildings/damage have either a photo or a note.</p>`;
- $('reviewResults').innerHTML=html; show('reviewScreen');
+ if(!state.current) return;
+ ensurePhotoChecklist(state.current);
+ const {photos,open,marked,questionable,passed}=getDepartureGroups();
+ const box=$('reviewResults');
+ box.innerHTML='';
+
+ const summary=document.createElement('div');
+ summary.className=`departure-summary ${open.length||questionable.length?'needs-attention':'passed'}`;
+ const title=document.createElement('strong');
+ title.textContent=open.length||questionable.length?'⚠ Departure check needs attention':'✓ Departure check passed';
+ const detail=document.createElement('p');
+ detail.textContent=`${passed.length} passed · ${open.length} missing · ${questionable.length} questionable · ${marked.length} marked cannot obtain`;
+ summary.append(title,detail);
+ box.appendChild(summary);
+
+ if(!open.length && !questionable.length){
+   const good=document.createElement('div');
+   good.className='departure-all-clear';
+   good.innerHTML='<strong>Everything is accounted for.</strong><p>You have a saved photo or a cannot-obtain mark for every checklist item, and no unresolved quality warnings remain.</p>';
+   box.appendChild(good);
+ }
+
+ if(open.length){
+   const h=document.createElement('h3'); h.textContent='Missing Photos'; box.appendChild(h);
+   open.forEach(p=>{
+     const card=document.createElement('article'); card.className='departure-issue missing-issue';
+     const label=document.createElement('strong'); label.textContent=p.title;
+     const note=document.createElement('p'); note.textContent='No completed photo is saved for this checklist item.';
+     const actions=document.createElement('div'); actions.className='departure-actions';
+     actions.append(
+       makeDepartureAction('📷 Retake','primary',()=>openPhoto(p.key,true)),
+       makeDepartureAction('Cannot Obtain','warning',()=>markMissingFromDeparture(p.key))
+     );
+     card.append(label,note,actions); box.appendChild(card);
+   });
+ }
+
+ if(questionable.length){
+   const h=document.createElement('h3'); h.textContent='Questionable Photo Quality'; box.appendChild(h);
+   questionable.forEach(p=>{
+     const card=document.createElement('article'); card.className='departure-issue quality-issue';
+     const label=document.createElement('strong'); label.textContent=p.title;
+     const note=document.createElement('p'); note.textContent=qualityIssueText(p);
+     const actions=document.createElement('div'); actions.className='departure-actions';
+     actions.append(
+       makeDepartureAction('📷 Retake','primary',()=>openPhoto(p.key,true)),
+       makeDepartureAction('Save Anyway','secondary',()=>acceptQualityFromDeparture(p.key))
+     );
+     card.append(label,note,actions); box.appendChild(card);
+   });
+ }
+
+ if(marked.length){
+   const h=document.createElement('h3'); h.textContent='Marked Cannot Obtain'; box.appendChild(h);
+   marked.forEach(p=>{
+     const card=document.createElement('article'); card.className='departure-issue marked-issue';
+     const label=document.createElement('strong'); label.textContent=p.title;
+     const note=document.createElement('p'); note.textContent=p.note||'Marked cannot obtain.';
+     const actions=document.createElement('div'); actions.className='departure-actions';
+     actions.append(makeDepartureAction('📷 Try Again','secondary',()=>openPhoto(p.key,true)));
+     card.append(label,note,actions); box.appendChild(card);
+   });
+ }
+
+ const footer=document.createElement('div'); footer.className='departure-footer';
+ if(open.length||questionable.length){
+   const saveAnyway=makeDepartureAction('Save Inspection Anyway','departure-save-anyway',saveDepartureAnyway);
+   footer.appendChild(saveAnyway);
+   const caution=document.createElement('p');
+   caution.className='muted';
+   caution.textContent='Use Save Inspection Anyway only when you have reviewed the remaining issues and intentionally want to leave them unresolved.';
+   footer.appendChild(caution);
+ }else{
+   const done=makeDepartureAction('✓ Done — Return to Inspection','primary',()=>show('dashboardScreen'));
+   footer.appendChild(done);
+ }
+ box.appendChild(footer);
+ show('reviewScreen');
 }
 function exportReport(){
  save(); const c=state.current; const photos=Object.values(c.photos); const report={...c, exported:new Date().toISOString(), photoSummary:photos.map(p=>({title:p.title,status:p.status,note:p.note,quality:p.quality,hasPhoto:!!p.dataUrl}))};
@@ -491,13 +620,15 @@ $('okPhotoBtn').onclick=()=>{
  p.note=$('photoNote').value.trim();
  p.status='done';
  p.hasPhoto=true;
+ p.departureQualityOverride=false;
+ clearDepartureOverride();
  save();
  nextAfterSave();
 };
 $('retakeBtn').onclick=launchCamera;
-$('markMissingBtn').onclick=async()=>{ const key=state.pendingPhoto; const p=state.current.photos[key]; p.note=$('photoNote').value.trim()||'Photo could not be obtained.'; p.status='missing'; p.dataUrl=null; p.hasPhoto=false; await removeStoredPhoto(state.current.id,key); save(); nextAfterSave(); };
+$('markMissingBtn').onclick=async()=>{ const key=state.pendingPhoto; const p=state.current.photos[key]; p.note=$('photoNote').value.trim()||'Photo could not be obtained.'; p.status='missing'; p.dataUrl=null; p.hasPhoto=false; p.departureQualityOverride=false; clearDepartureOverride(); await removeStoredPhoto(state.current.id,key); save(); nextAfterSave(); };
 $('saveBtn').onclick=save; $('departureBtn').onclick=departureCheck; $('exportBtn').onclick=exportReport;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault(); state.deferredInstall=e; $('installBtn').classList.remove('hidden');});
 $('installBtn').onclick=async()=>{ if(state.deferredInstall){ state.deferredInstall.prompt(); state.deferredInstall=null; $('installBtn').classList.add('hidden'); }};
-if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=2.1.0-build-007',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=2.1.0-build-010',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
 renderSaved();
