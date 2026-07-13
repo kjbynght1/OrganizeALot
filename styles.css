@@ -63,3 +63,16 @@
   .photo-row .info small{display:block;line-height:1.35;margin-top:3px}
   .add-photo-btn,.photo-row .secondary{flex:0 0 auto}
 }
+
+/* Build 015: smart conditional checklist */
+.smart-checklist-note{margin:0 0 12px;line-height:1.45}
+.smart-condition-controls{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 14px 14px;margin-top:-2px}
+.condition-choice{background:#1e293b;color:var(--text);border:1px solid var(--line);padding:10px 8px;font-size:13px;line-height:1.2}
+.condition-choice.selected.present{background:rgba(34,197,94,.18);border-color:var(--accent);color:#dcfce7}
+.condition-choice.selected.none{background:rgba(56,189,248,.16);border-color:var(--accent2);color:#e0f2fe}
+.photo-item.na .photo-row{border-color:var(--accent2)}
+.photo-row.na .status{width:42px;background:var(--accent2);color:#082f49;font-size:11px}
+.disabled-photo-btn{opacity:.45;cursor:not-allowed}
+.basement-condition{padding-top:2px;border-top:1px dashed var(--line);margin:0 14px;padding-left:0;padding-right:0}
+.departure-issue.na-issue{border-color:var(--accent2)}
+@media(max-width:430px){.smart-condition-controls{grid-template-columns:1fr}}
