@@ -55,29 +55,36 @@ function renderDashboard(){
  $('obsNotice').classList.toggle('hidden', c.type!=='OBS');
  const list=$('photoList'); list.innerHTML=''; const photos=Object.values(c.photos); const complete=photos.filter(p=>p.status==='done'||p.status==='missing').length;
  $('progressText').textContent=`${complete}/${photos.length} complete`; $('readyText').textContent= complete===photos.length?'Ready to export':'Not ready'; $('progressBar').style.width=`${Math.round(complete/photos.length*100)}%`;
- photos.forEach(p=>{ const row=document.createElement('div'); row.className=`photo-row ${p.status==='done'?'done':p.status==='missing'?'missing':''}`; row.innerHTML=`<div class="status">${p.status==='done'?'✓':p.status==='missing'?'!':'•'}</div><div class="info"><strong>${p.title}</strong><small>${p.status==='done'?'Saved':p.status==='missing'?'Marked unobtainable':p.help}</small></div><button class="secondary">${p.status==='done'?'View':'Take Photo'}</button>`; row.querySelector('button').onclick=()=>openPhoto(p.key,p.status!=='done'); list.appendChild(row); });
- renderQuickPhotoGallery(photos);
-}
-function renderQuickPhotoGallery(photos){
- const gallery=$('quickPhotoGallery');
- const count=$('quickPhotoCount');
- if(!gallery || !count) return;
- const saved=photos.filter(p=>p.status==='done' && p.dataUrl);
- count.textContent=`${saved.length} saved`;
- gallery.innerHTML='';
- if(!saved.length){
-   gallery.innerHTML='<p class="muted quick-reference-empty">Saved pictures will appear here for quick reference.</p>';
-   return;
- }
- saved.forEach(p=>{
-   const card=document.createElement('button');
-   card.type='button';
-   card.className='quick-photo-card';
-   card.setAttribute('aria-label',`View ${p.title} photo`);
-   card.innerHTML=`<img src="${p.dataUrl}" alt="${p.title} photo"><span>${p.title}</span>`;
-   card.onclick=()=>openPhoto(p.key,false);
-   gallery.appendChild(card);
+ photos.forEach(p=>{
+   const item=document.createElement('div');
+   item.className='photo-item';
+
+   const row=document.createElement('div');
+   row.className=`photo-row ${p.status==='done'?'done':p.status==='missing'?'missing':''}`;
+   row.innerHTML=`<div class="status">${p.status==='done'?'✓':p.status==='missing'?'!':'•'}</div><div class="info"><strong>${p.title}</strong><small>${p.status==='done'?'Saved — preview below':p.status==='missing'?'Marked unobtainable':p.help}</small></div><button class="secondary">${p.status==='done'?'View':'Take Photo'}</button>`;
+   row.querySelector('button').onclick=()=>openPhoto(p.key,p.status!=='done');
+   item.appendChild(row);
+
+   if(p.status==='done' && p.dataUrl){
+     const preview=document.createElement('div');
+     preview.className='inline-photo-preview';
+     preview.innerHTML=`<button type="button" class="inline-photo-image-button" aria-label="View ${p.title} photo"><img src="${p.dataUrl}" alt="${p.title} photo"></button><button type="button" class="delete-photo-btn">🗑 Delete Photo</button>`;
+     preview.querySelector('.inline-photo-image-button').onclick=()=>openPhoto(p.key,false);
+     preview.querySelector('.delete-photo-btn').onclick=()=>deletePhoto(p.key);
+     item.appendChild(preview);
+   }
+
+   list.appendChild(item);
  });
+}
+function deletePhoto(key){
+ if(!state.current || !state.current.photos[key]) return;
+ const p=state.current.photos[key];
+ p.dataUrl=null;
+ p.hasPhoto=false;
+ p.status='open';
+ p.quality=null;
+ save();
 }
 function firstOpen(){ return Object.values(state.current.photos).find(p=>p.status==='open'); }
 function launchCamera(){
@@ -328,5 +335,5 @@ $('markMissingBtn').onclick=()=>{ const p=state.current.photos[state.pendingPhot
 $('saveBtn').onclick=save; $('departureBtn').onclick=departureCheck; $('exportBtn').onclick=exportReport;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault(); state.deferredInstall=e; $('installBtn').classList.remove('hidden');});
 $('installBtn').onclick=async()=>{ if(state.deferredInstall){ state.deferredInstall.prompt(); state.deferredInstall=null; $('installBtn').classList.add('hidden'); }};
-if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=2.1.0-build-005',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=2.1.0-build-006',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
 renderSaved();
