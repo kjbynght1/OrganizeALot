@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0f172a" />
-  <title>OrganizeALot v2.1.0 Build 001</title>
+  <title>OrganizeALot v2.1.0 Build 002</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -12,7 +12,7 @@
   <header class="app-header">
     <div>
       <h1>OrganizeALot</h1>
-      <p>Residential Inspection Assistant v2.1.0 · Build 001</p>
+      <p>Residential Inspection Assistant v2.1.0 · Build 002</p>
     </div>
     <button id="installBtn" class="small hidden">Install</button>
   </header>
@@ -84,7 +84,9 @@
       <h2 id="photoTitle">Photo</h2>
       <p id="photoHelp" class="muted"></p>
       <div class="capture-box">
-        <input id="cameraInput" type="file" accept="image/*" capture="environment" />
+        <input id="cameraInput" class="camera-native-input" type="file" accept="image/*" capture="environment" />
+        <button id="takePhotoBtn" class="primary camera-trigger">📷 Take Photo</button>
+        <p id="cameraHint" class="muted camera-hint">Tap to open the rear camera.</p>
         <img id="previewImg" alt="Preview" class="hidden" />
       </div>
       <div id="qualityBox" class="quality hidden"></div>

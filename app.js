@@ -34,10 +34,34 @@ function renderDashboard(){
  $('obsNotice').classList.toggle('hidden', c.type!=='OBS');
  const list=$('photoList'); list.innerHTML=''; const photos=Object.values(c.photos); const complete=photos.filter(p=>p.status==='done'||p.status==='missing').length;
  $('progressText').textContent=`${complete}/${photos.length} complete`; $('readyText').textContent= complete===photos.length?'Ready to export':'Not ready'; $('progressBar').style.width=`${Math.round(complete/photos.length*100)}%`;
- photos.forEach(p=>{ const row=document.createElement('div'); row.className=`photo-row ${p.status==='done'?'done':p.status==='missing'?'missing':''}`; row.innerHTML=`<div class="status">${p.status==='done'?'✓':p.status==='missing'?'!':'•'}</div><div class="info"><strong>${p.title}</strong><small>${p.status==='done'?'Saved':p.status==='missing'?'Marked unobtainable':p.help}</small></div><button class="secondary">Open</button>`; row.querySelector('button').onclick=()=>openPhoto(p.key); list.appendChild(row); });
+ photos.forEach(p=>{ const row=document.createElement('div'); row.className=`photo-row ${p.status==='done'?'done':p.status==='missing'?'missing':''}`; row.innerHTML=`<div class="status">${p.status==='done'?'✓':p.status==='missing'?'!':'•'}</div><div class="info"><strong>${p.title}</strong><small>${p.status==='done'?'Saved':p.status==='missing'?'Marked unobtainable':p.help}</small></div><button class="secondary">${p.status==='done'?'View':'Take Photo'}</button>`; row.querySelector('button').onclick=()=>openPhoto(p.key,p.status!=='done'); list.appendChild(row); });
 }
 function firstOpen(){ return Object.values(state.current.photos).find(p=>p.status==='open'); }
-function openPhoto(key){ state.pendingPhoto=key; const p=state.current.photos[key]; $('photoTitle').textContent=p.title; $('photoHelp').textContent=p.help; $('photoNote').value=p.note||''; $('cameraInput').value=''; $('previewImg').classList.add('hidden'); $('qualityBox').className='quality hidden'; $('okPhotoBtn').disabled=!p.dataUrl; if(p.dataUrl){ $('previewImg').src=p.dataUrl; $('previewImg').classList.remove('hidden'); runQuality(p.dataUrl); } show('cameraScreen'); }
+function launchCamera(){
+  const input=$('cameraInput');
+  input.value='';
+  input.click();
+}
+function openPhoto(key, autoLaunch=false){
+  state.pendingPhoto=key;
+  const p=state.current.photos[key];
+  $('photoTitle').textContent=p.title;
+  $('photoHelp').textContent=p.help;
+  $('photoNote').value=p.note||'';
+  $('cameraInput').value='';
+  $('previewImg').classList.add('hidden');
+  $('qualityBox').className='quality hidden';
+  $('okPhotoBtn').disabled=!p.dataUrl;
+  $('takePhotoBtn').textContent=p.dataUrl?'📷 Take New Photo':'📷 Take Photo';
+  $('cameraHint').classList.toggle('hidden',!!p.dataUrl);
+  if(p.dataUrl){
+    $('previewImg').src=p.dataUrl;
+    $('previewImg').classList.remove('hidden');
+    runQuality(p.dataUrl);
+  }
+  show('cameraScreen');
+  if(autoLaunch) launchCamera();
+}
 function runQuality(dataUrl){
  const img=new Image(); img.onload=()=>{
    const mp=(img.naturalWidth*img.naturalHeight)/1000000; let msg=[], cls='good';
@@ -50,7 +74,16 @@ function runQuality(dataUrl){
 }
 function readFile(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); }); }
 async function onCamera(e){ const file=e.target.files[0]; if(!file) return; const dataUrl=await readFile(file); const p=state.current.photos[state.pendingPhoto]; p.dataUrl=dataUrl; p.status='preview'; $('previewImg').src=dataUrl; $('previewImg').classList.remove('hidden'); $('okPhotoBtn').disabled=false; runQuality(dataUrl); }
-function nextAfterSave(){ const n=firstOpen(); if(n){ openPhoto(n.key); setTimeout(()=>$('cameraInput').click(),200); } else { save(); renderDashboard(); show('dashboardScreen'); } }
+function nextAfterSave(){
+ const n=firstOpen();
+ if(n){
+   openPhoto(n.key,true);
+ } else {
+   save();
+   renderDashboard();
+   show('dashboardScreen');
+ }
+}
 function departureCheck(){
  const photos=Object.values(state.current.photos); const missing=photos.filter(p=>p.status==='open'); const marked=photos.filter(p=>p.status==='missing'); const done=photos.filter(p=>p.status==='done');
  let html=`<div class="notice"><strong>${done.length} photos saved.</strong><br>${missing.length} still open. ${marked.length} marked unobtainable.</div>`;
@@ -67,10 +100,11 @@ document.querySelectorAll('.tile').forEach(b=>b.onclick=()=>{newInspection(b.dat
 document.querySelectorAll('[data-screen]').forEach(b=>b.onclick=()=>show(b.dataset.screen));
 $('startBtn').onclick=()=>{ const c=state.current; c.inspectionId=$('inspectionId').value.trim(); c.address=$('address').value.trim(); c.inspector=$('inspector').value.trim()||'Chris Roberts'; save(); renderDashboard(); show('dashboardScreen'); };
 $('openMapBtn').onclick=()=>{ const q=encodeURIComponent($('address').value.trim()); if(q) window.open(`https://www.google.com/maps/search/?api=1&query=${q}`,'_blank'); };
-$('takeNextBtn').onclick=()=>{ const p=firstOpen(); if(p) openPhoto(p.key); else departureCheck(); };
+$('takeNextBtn').onclick=()=>{ const p=firstOpen(); if(p) openPhoto(p.key,true); else departureCheck(); };
 $('cameraInput').addEventListener('change', onCamera);
+$('takePhotoBtn').onclick=launchCamera;
 $('okPhotoBtn').onclick=()=>{ const p=state.current.photos[state.pendingPhoto]; p.note=$('photoNote').value.trim(); p.status='done'; save(); nextAfterSave(); };
-$('retakeBtn').onclick=()=>{ $('cameraInput').value=''; $('cameraInput').click(); };
+$('retakeBtn').onclick=launchCamera;
 $('markMissingBtn').onclick=()=>{ const p=state.current.photos[state.pendingPhoto]; p.note=$('photoNote').value.trim()||'Photo could not be obtained.'; p.status='missing'; p.dataUrl=null; save(); nextAfterSave(); };
 $('saveBtn').onclick=save; $('departureBtn').onclick=departureCheck; $('exportBtn').onclick=exportReport;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault(); state.deferredInstall=e; $('installBtn').classList.remove('hidden');});
