@@ -201,7 +201,7 @@ function ensurePhotoChecklist(inspection){
 function newInspection(type){
   state.current={
     id:uid(), type, inspectionId:'', address:'', inspector:'Chris Roberts',
-    created:new Date().toISOString(), updated:new Date().toISOString(), conditions:{basement:'unknown'}, photos:{}
+    created:new Date().toISOString(), updated:new Date().toISOString(), conditions:{basement:'unknown'}, resumeTarget:{screen:'dashboardScreen',itemKey:null}, photos:{}
   };
   photosFor(type).forEach(([key,title,help,section,minPhotos=1,conditional=false,unlimited=true])=>{
     state.current.photos[key]={key,title,help,section:section||'Exterior',minPhotos:Math.max(1,Number(minPhotos)||1),conditional:!!conditional,condition:conditional?'unknown':'present',unlimited:unlimited!==false,status:'open',note:'',images:[]};
@@ -288,7 +288,7 @@ async function hydrateInspectionPhotos(inspection){
   ));
 }
 
-function save(){
+function persistInspectionMetadata({render=false}={}){
   if(!state.current) return false;
   ensurePhotoChecklist(state.current);
   state.current.updated=new Date().toISOString();
@@ -301,13 +301,28 @@ function save(){
       });
     });
     localStorage.setItem(state.current.id,JSON.stringify(metadata));
-    renderDashboard();
+    if(render) renderDashboard();
     return true;
   }catch(err){
     console.warn('Inspection metadata save failed.',err);
-    renderDashboard();
+    if(render) renderDashboard();
     return false;
   }
+}
+
+function save(){ return persistInspectionMetadata({render:true}); }
+
+function setResumeTarget(screen='dashboardScreen',itemKey=null){
+  if(!state.current) return;
+  state.current.resumeTarget={screen,itemKey:itemKey||null,updatedAt:new Date().toISOString()};
+  persistInspectionMetadata({render:false});
+}
+
+function inspectionProgress(inspection){
+  ensurePhotoChecklist(inspection);
+  const items=Object.values(inspection.photos||{});
+  const complete=items.filter(item=>['done','missing','na'].includes(itemStatus(item))).length;
+  return {complete,total:items.length,pct:items.length?Math.round(complete/items.length*100):0};
 }
 
 function allInspections(){
@@ -321,20 +336,76 @@ function allInspections(){
 function renderSaved(){
   const box=$('savedList');
   box.innerHTML='';
-  const items=allInspections();
-  if(!items.length){ box.innerHTML='<p class="muted">No saved inspections yet.</p>'; return; }
-  items.forEach(item=>{
-    const b=document.createElement('button');
-    b.className='saved-item';
-    b.innerHTML=`<strong>${item.type} — ${item.inspectionId||'No ID'}</strong><br><small>${item.address||'No address'} · ${new Date(item.updated).toLocaleString()}</small>`;
-    b.onclick=async()=>{
-      state.current=item;
-      await hydrateInspectionPhotos(state.current);
-      renderDashboard();
-      show('dashboardScreen');
-    };
-    box.appendChild(b);
+  const query=($('resumeSearch')?.value||'').trim().toLowerCase();
+  const all=allInspections();
+  const items=all.filter(item=>{
+    if(!query) return true;
+    return [item.inspectionId,item.address,item.type].some(value=>String(value||'').toLowerCase().includes(query));
   });
+  if(!all.length){ box.innerHTML='<p class="muted">No saved inspections yet.</p>'; return; }
+  if(!items.length){ box.innerHTML='<p class="muted">No saved inspection matches that ID or address.</p>'; return; }
+
+  items.forEach(item=>{
+    const progress=inspectionProgress(item);
+    const card=document.createElement('article');
+    card.className='saved-inspection-card';
+
+    const top=document.createElement('div');
+    top.className='saved-inspection-top';
+    const info=document.createElement('div');
+    const title=document.createElement('strong');
+    title.textContent=`${item.type} — ${item.inspectionId||'No ID'}`;
+    const address=document.createElement('span');
+    address.textContent=item.address||'No address';
+    info.append(title,address);
+    const badge=document.createElement('span');
+    badge.className='saved-progress-badge';
+    badge.textContent=`${progress.complete}/${progress.total}`;
+    top.append(info,badge);
+
+    const bar=document.createElement('div');
+    bar.className='saved-progress';
+    const fill=document.createElement('div');
+    fill.style.width=`${progress.pct}%`;
+    bar.appendChild(fill);
+
+    const meta=document.createElement('small');
+    meta.className='saved-inspection-meta';
+    meta.textContent=`${progress.pct}% complete · Last saved ${new Date(item.updated).toLocaleString()}`;
+
+    const resume=document.createElement('button');
+    resume.className='primary resume-inspection-btn';
+    resume.textContent='Resume Inspection';
+    resume.onclick=()=>resumeInspection(item);
+
+    card.append(top,bar,meta,resume);
+    box.appendChild(card);
+  });
+}
+
+async function resumeInspection(item){
+  state.current=item;
+  ensurePhotoChecklist(state.current);
+  await hydrateInspectionPhotos(state.current);
+  renderDashboard();
+  const target=state.current.resumeTarget||{};
+  if(target.screen==='cameraScreen' && target.itemKey && state.current.photos[target.itemKey]){
+    openPhoto(target.itemKey,false,null);
+    const resumeNote=$('qualityBox');
+    if(resumeNote){
+      resumeNote.className='quality good';
+      resumeNote.innerHTML='<strong>Inspection resumed</strong><p>You are back on the checklist item where you stopped. Take another photo or move to the next item when ready.</p>';
+      resumeNote.classList.remove('hidden');
+    }
+    return;
+  }
+  show('dashboardScreen');
+  if(target.itemKey){
+    requestAnimationFrame(()=>{
+      const el=document.querySelector(`[data-photo-key="${CSS.escape(target.itemKey)}"]`);
+      if(el){ el.classList.add('resume-highlight'); el.scrollIntoView({behavior:'smooth',block:'center'}); setTimeout(()=>el.classList.remove('resume-highlight'),1800); }
+    });
+  }
 }
 
 function renderDashboard(){
@@ -606,6 +677,7 @@ function openPhoto(itemKey,autoLaunch=false,imageId=null){
     $('previewImg').classList.remove('hidden');
     runQuality(state.pendingDataUrl,{autoSave:false});
   }
+  setResumeTarget('cameraScreen',itemKey);
   show('cameraScreen');
   if(autoLaunch) launchCamera();
 }
@@ -854,6 +926,7 @@ function advanceFromCurrent(){
   if(next){
     openPhoto(next.key,true,null);
   }else{
+    setResumeTarget('dashboardScreen',currentKey);
     save();
     renderDashboard();
     show('dashboardScreen');
@@ -1108,12 +1181,19 @@ document.querySelectorAll('.tile').forEach(b=>b.onclick=()=>{
   $('inspector').value='Chris Roberts';
   show('setupScreen');
 });
-document.querySelectorAll('[data-screen]').forEach(b=>b.onclick=()=>show(b.dataset.screen));
+document.querySelectorAll('[data-screen]').forEach(b=>b.onclick=()=>{
+  const target=b.dataset.screen;
+  if(state.current && (target==='dashboardScreen'||target==='menuScreen')){
+    setResumeTarget('dashboardScreen',state.pendingPhoto?.itemKey||state.current.resumeTarget?.itemKey||null);
+  }
+  show(target);
+});
 $('startBtn').onclick=()=>{
   const c=state.current;
   c.inspectionId=$('inspectionId').value.trim();
   c.address=$('address').value.trim();
   c.inspector=$('inspector').value.trim()||'Chris Roberts';
+  c.resumeTarget={screen:'dashboardScreen',itemKey:null,updatedAt:new Date().toISOString()};
   save();
   renderDashboard();
   show('dashboardScreen');
@@ -1179,6 +1259,7 @@ $('installBtn').onclick=async()=>{
   }
 };
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('sw.js?v=2.1.0-build-015',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
+  navigator.serviceWorker.register('sw.js?v=2.1.0-build-016',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
 }
+$('resumeSearch')?.addEventListener('input',renderSaved);
 renderSaved();
