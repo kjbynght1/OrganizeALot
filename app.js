@@ -11,30 +11,37 @@ const OBS_PHOTOS = [
 ];
 
 const STANDARD_PHOTOS = [
-  ['front','Front','Exterior front photo.','Exterior'],
-  ['left','Left Side','Exterior left side.','Exterior'],
-  ['rear','Rear','Exterior rear.','Exterior'],
-  ['right','Right Side','Exterior right side.','Exterior'],
-  ['roof','Roof Overview','Full roof overview from the safest available angle.','Exterior'],
-  ['roof_close','Close Roof Photo','Close-up of shingles/roof covering, flashing, and visible condition.','Exterior'],
-  ['outbuildings','Outbuildings','Detached garage, shed, barn, pole barn, or other outbuildings. Add as many photos as needed.','Exterior'],
-  ['pool_hot_tub','Hot Tub / Swimming Pool','Swimming pool, hot tub, spa, or related feature. Add multiple photos when both pool and hot tub are present.','Exterior'],
-  ['trampolines','Trampolines','Any trampoline or similar recreational equipment. Add as many photos as needed.','Exterior'],
-  ['exterior_damage','Exterior Damage / Hazards','Visible damage, hazards, liability concerns, or unusual conditions. Add as many photos as needed.','Exterior'],
+  ['front','Front of Home','Take 1 clear front photo of the main dwelling.','Exterior',1,false,true],
+  ['rear','Rear of Home','Take 1 clear rear photo of the main dwelling.','Exterior',1,false,true],
+  ['left','Left Side of Home','Take 1 clear left-side photo of the main dwelling.','Exterior',1,false,true],
+  ['right','Right Side of Home','Take 1 clear right-side photo of the main dwelling.','Exterior',1,false,true],
+  ['address','Address Verification','Photograph the house number, mailbox, curb, street sign, or another clear address identifier.','Exterior',1,false,true],
+  ['outbuildings','All Outbuildings','Photograph every detached garage, shed, barn, pole barn, or other outbuilding on the premises. Stay on this item and add as many photos as needed.','Exterior',1,true,true],
+  ['pools_spas','All Pools / Spas','Photograph every swimming pool, hot tub, or spa on the premises. Stay on this item and add as many photos as needed.','Exterior',1,true,true],
+  ['hud_label','HUD Label if Manufactured Home','Photograph the HUD label if the property is a manufactured home. Mark Not Applicable when it is not a manufactured home.','Exterior',1,true,true],
 
-  ['interior_entry','Entry / Foyer','Main entry, foyer, and immediate interior condition.','Interior'],
-  ['interior_living','Living / Family Room','Living room, family room, great room, or similar main living area.','Interior'],
-  ['interior_kitchen','Kitchen','Kitchen overview, cabinets, counters, appliances, and visible condition. Add multiple photos as needed.','Interior'],
-  ['interior_dining','Dining Area','Dining room, breakfast area, or eat-in kitchen area.','Interior'],
-  ['interior_bathrooms','Bathrooms','Photograph every required bathroom. Add multiple photos for multiple bathrooms or extra views.','Interior'],
-  ['interior_bedrooms','Bedrooms (if required)','Bedrooms when required by the inspection assignment. Add multiple photos as needed.','Interior'],
-  ['interior_halls','Hallways / Landings','Hallways, upstairs landing, and circulation areas.','Interior'],
-  ['interior_stairs','Stairs / Railings','Interior stairs, handrails, guardrails, and stair condition.','Interior'],
-  ['interior_basement','Basement / Crawlspace','Basement or accessible crawlspace overview, walls, foundation, utilities, and visible conditions. Add multiple photos as needed.','Interior'],
-  ['interior_utility','Utility / Mechanical','Electrical panel, furnace, water heater, laundry, and other mechanical equipment when required.','Interior'],
-  ['interior_attic','Attic (if accessible)','Attic access and visible attic condition when safely accessible and required.','Interior'],
-  ['interior_damage','Interior Damage / Hazards','Visible interior damage, water staining, hazards, or unusual conditions. Add as many photos as needed.','Interior']
+  ['levels','Each Level, Including Basement','Take at least 1 photo per level of the home, including the basement when present. Stay on this item and add one or more photos for every level.','Interior',1,false,true],
+  ['kitchen','Kitchen — 2 Photos Required','Take at least 2 kitchen photos showing the room and visible condition.','Interior',2,false,true],
+  ['bathrooms','All Bathrooms','Photograph every bathroom. Stay on this item and add as many photos as needed until every bathroom is covered.','Interior',1,false,true],
+  ['living_room','Living Room','Take at least 1 clear living-room photo.','Interior',1,false,true],
+  ['electrical_panels','All Electrical Panels','Photograph every electrical panel present. Stay on this item and add as many photos as needed.','Interior',1,false,true],
+
+  ['roof_front','Roof — Front View','Take 1 roof photo from the front showing the overall roof view.','Roof',1,false,true],
+  ['roof_close','Roof — Close-Up','Take 1 close-up photo of the roof covering and visible condition.','Roof',1,false,true],
+
+  ['hazards','All Hazards — Main Dwelling / Outbuildings','Photograph every noted hazard involving the main dwelling, outbuildings, or premises. Stay on this item and add as many photos as needed. Mark Not Present when no hazards are noted.','Hazards',1,true,true],
+  ['roof_hazard','Roof Hazard — 4 Photos if Present','If a roof hazard is present, take 3 close-up photos of the hazard and 1 further-back photo showing the hazard in context. Mark Not Present when there is no roof hazard.','Hazards',4,true,true]
 ];
+
+const LEGACY_PHOTO_KEY_MAP = {
+  pools_spas:['pool_hot_tub'],
+  kitchen:['interior_kitchen'],
+  bathrooms:['interior_bathrooms'],
+  living_room:['interior_living'],
+  roof_front:['roof'],
+  hazards:['exterior_damage','interior_damage']
+};
+
 
 const state = {
   current:null,
@@ -60,17 +67,18 @@ function photoUid(){ return 'photo_'+Date.now()+'_'+Math.random().toString(36).s
 function photosFor(type){ return type==='OBS'?OBS_PHOTOS:STANDARD_PHOTOS; }
 function itemImages(item){ return Array.isArray(item.images)?item.images:[]; }
 function itemHasPhotos(item){ return itemImages(item).some(img=>img.hasPhoto || img.dataUrl); }
+function savedImageCount(item){ return itemImages(item).filter(img=>img.hasPhoto || img.dataUrl).length; }
+function requiredPhotoCount(item){ return Math.max(1,Number(item?.minPhotos)||1); }
 function itemStatus(item){
   if(item.status==='missing' && !itemHasPhotos(item)) return 'missing';
-  if(itemHasPhotos(item)) return 'done';
+  if(savedImageCount(item)>=requiredPhotoCount(item)) return 'done';
   return 'open';
 }
-function savedImageCount(item){ return itemImages(item).filter(img=>img.hasPhoto || img.dataUrl).length; }
 function clearDepartureOverride(){
   if(state.current && state.current.departureOverride) state.current.departureOverride=null;
 }
 
-function legacyImageFromItem(existing){
+function legacyImageFromItem(existing,storageItemKey=null){
   if(!existing) return null;
   if(!(existing.dataUrl || existing.hasPhoto || existing.status==='done')) return null;
   return {
@@ -81,11 +89,12 @@ function legacyImageFromItem(existing){
     note:existing.note||'',
     departureQualityOverride:!!existing.departureQualityOverride,
     createdAt:existing.updated||new Date().toISOString(),
-    legacyStorageKey:true
+    legacyStorageKey:true,
+    storageItemKey:storageItemKey||null
   };
 }
 
-function normalizeImage(img,index){
+function normalizeImage(img,index,storageItemKey=null){
   if(!img) return null;
   return {
     id:img.id||`legacy_${index}`,
@@ -95,7 +104,8 @@ function normalizeImage(img,index){
     note:img.note||'',
     departureQualityOverride:!!img.departureQualityOverride,
     createdAt:img.createdAt||new Date().toISOString(),
-    legacyStorageKey:!!img.legacyStorageKey
+    legacyStorageKey:!!img.legacyStorageKey,
+    storageItemKey:img.storageItemKey||storageItemKey||null
   };
 }
 
@@ -104,37 +114,60 @@ function ensurePhotoChecklist(inspection){
   if(!inspection.photos) inspection.photos={};
   const ordered={};
 
-  photosFor(inspection.type).forEach(([key,title,help,section])=>{
-    const existing=inspection.photos[key]||{};
-    let images=[];
-    if(Array.isArray(existing.images)){
-      images=existing.images.map(normalizeImage).filter(Boolean);
-    }else{
-      const legacy=legacyImageFromItem(existing);
-      if(legacy) images=[legacy];
-    }
+  photosFor(inspection.type).forEach(([key,title,help,section,minPhotos=1,conditional=false,unlimited=true])=>{
+    const sourceKeys=[key,...(LEGACY_PHOTO_KEY_MAP[key]||[])];
+    const sources=sourceKeys.map(sourceKey=>({sourceKey,existing:inspection.photos[sourceKey]})).filter(x=>x.existing);
+    const images=[];
+    const seen=new Set();
+    let note='';
+    let sourceStatus='open';
+
+    sources.forEach(({sourceKey,existing})=>{
+      if(!note && existing.note) note=existing.note;
+      if(existing.status==='missing') sourceStatus='missing';
+      let sourceImages=[];
+      if(Array.isArray(existing.images)) sourceImages=existing.images.map((img,index)=>normalizeImage(img,index,sourceKey===key?null:sourceKey)).filter(Boolean);
+      else{
+        const legacy=legacyImageFromItem(existing,sourceKey===key?null:sourceKey);
+        if(legacy) sourceImages=[legacy];
+      }
+      sourceImages.forEach(image=>{
+        const token=`${image.storageItemKey||sourceKey}:${image.id}`;
+        if(!seen.has(token)){ seen.add(token); images.push(image); }
+      });
+    });
+
     ordered[key]={
       key,
       title,
       help,
       section:section||'Exterior',
-      status:itemHasPhotos({images})?'done':(existing.status||'open'),
-      note:existing.note||'',
+      minPhotos:Math.max(1,Number(minPhotos)||1),
+      conditional:!!conditional,
+      unlimited:unlimited!==false,
+      status:images.length>=Math.max(1,Number(minPhotos)||1)?'done':(sourceStatus||'open'),
+      note,
       images
     };
   });
 
-  Object.entries(inspection.photos).forEach(([key,value])=>{
-    if(ordered[key]) return;
-    const extra={...value};
-    if(!Array.isArray(extra.images)){
-      const legacy=legacyImageFromItem(extra);
-      extra.images=legacy?[legacy]:[];
-    }
-    extra.section=extra.section||'Other';
-    extra.status=itemStatus(extra);
-    ordered[key]=extra;
-  });
+  // OBS keeps any legacy/custom checklist items. Residential uses the official list above exactly.
+  if(inspection.type==='OBS'){
+    Object.entries(inspection.photos).forEach(([key,value])=>{
+      if(ordered[key]) return;
+      const extra={...value};
+      if(!Array.isArray(extra.images)){
+        const legacy=legacyImageFromItem(extra);
+        extra.images=legacy?[legacy]:[];
+      }
+      extra.section=extra.section||'Other';
+      extra.minPhotos=Math.max(1,Number(extra.minPhotos)||1);
+      extra.conditional=!!extra.conditional;
+      extra.unlimited=extra.unlimited!==false;
+      extra.status=itemStatus(extra);
+      ordered[key]=extra;
+    });
+  }
 
   inspection.photos=ordered;
   return inspection;
@@ -145,8 +178,8 @@ function newInspection(type){
     id:uid(), type, inspectionId:'', address:'', inspector:'Chris Roberts',
     created:new Date().toISOString(), updated:new Date().toISOString(), photos:{}
   };
-  photosFor(type).forEach(([key,title,help,section])=>{
-    state.current.photos[key]={key,title,help,section:section||'Exterior',status:'open',note:'',images:[]};
+  photosFor(type).forEach(([key,title,help,section,minPhotos=1,conditional=false,unlimited=true])=>{
+    state.current.photos[key]={key,title,help,section:section||'Exterior',minPhotos:Math.max(1,Number(minPhotos)||1),conditional:!!conditional,unlimited:unlimited!==false,status:'open',note:'',images:[]};
   });
 }
 
@@ -185,11 +218,12 @@ async function getStoredPhoto(inspectionId,itemKey,image){
     const value=await new Promise((resolve,reject)=>{
       const tx=db.transaction(PHOTO_STORE,'readonly');
       const store=tx.objectStore(PHOTO_STORE);
-      const primary=store.get(photoDbKey(inspectionId,itemKey,image.id));
+      const storageItemKey=image.storageItemKey||itemKey;
+      const primary=store.get(photoDbKey(inspectionId,storageItemKey,image.id));
       primary.onsuccess=()=>{
         if(primary.result){ resolve(primary.result); return; }
         if(image.legacyStorageKey || image.id==='legacy'){
-          const legacy=store.get(legacyPhotoDbKey(inspectionId,itemKey));
+          const legacy=store.get(legacyPhotoDbKey(inspectionId,storageItemKey));
           legacy.onsuccess=()=>resolve(legacy.result||null);
           legacy.onerror=()=>reject(legacy.error);
         }else resolve(null);
@@ -207,8 +241,9 @@ async function removeStoredPhoto(inspectionId,itemKey,image){
     await new Promise((resolve,reject)=>{
       const tx=db.transaction(PHOTO_STORE,'readwrite');
       const store=tx.objectStore(PHOTO_STORE);
-      store.delete(photoDbKey(inspectionId,itemKey,image.id));
-      if(image.legacyStorageKey || image.id==='legacy') store.delete(legacyPhotoDbKey(inspectionId,itemKey));
+      const storageItemKey=image.storageItemKey||itemKey;
+      store.delete(photoDbKey(inspectionId,storageItemKey,image.id));
+      if(image.legacyStorageKey || image.id==='legacy') store.delete(legacyPhotoDbKey(inspectionId,storageItemKey));
       tx.oncomplete=resolve;
       tx.onerror=()=>reject(tx.error);
       tx.onabort=()=>reject(tx.error);
@@ -305,6 +340,7 @@ function renderDashboard(){
 
     const statusValue=itemStatus(item);
     const count=savedImageCount(item);
+    const min=requiredPhotoCount(item);
     const wrapper=document.createElement('section');
     wrapper.className=`photo-item ${statusValue}`;
     wrapper.dataset.photoKey=item.key;
@@ -313,21 +349,22 @@ function renderDashboard(){
     row.className=`photo-row ${statusValue}`;
     const status=document.createElement('div');
     status.className='status';
-    status.textContent=statusValue==='done'?String(count):statusValue==='missing'?'!':'•';
+    status.textContent=statusValue==='done'?String(count):statusValue==='missing'?'!':count?`${count}/${min}`:'•';
 
     const info=document.createElement('div');
     info.className='info';
     const title=document.createElement('strong');
     title.textContent=item.title;
     const help=document.createElement('small');
-    if(statusValue==='done') help.textContent=`${count} ${count===1?'photo':'photos'} saved — add more anytime`;
-    else if(statusValue==='missing') help.textContent='Marked cannot obtain / not present';
-    else help.textContent=item.help;
+    if(statusValue==='done') help.textContent=`${count} ${count===1?'photo':'photos'} saved — minimum requirement met; unlimited additional photos allowed`;
+    else if(statusValue==='missing') help.textContent=item.conditional?'Marked not present / not applicable':'Marked cannot obtain';
+    else if(count>0 && min>1) help.textContent=`${count} of ${min} required photos saved — ${min-count} more needed. Unlimited additional photos allowed. ${item.help}`;
+    else help.textContent=item.conditional?`${item.help} Unlimited photos allowed. Use Not Present / N/A when it does not apply.`:`${item.help} Unlimited photos allowed.`;
     info.append(title,help);
 
     const addBtn=document.createElement('button');
     addBtn.className=statusValue==='done'?'add-photo-btn':'secondary';
-    addBtn.textContent=statusValue==='done'?'+ Add Photo':'Take Photo';
+    addBtn.textContent=count?'+ Add Another Photo':'Take Photo';
     addBtn.onclick=()=>openPhoto(item.key,true,null);
 
     row.append(status,info,addBtn);
@@ -459,18 +496,19 @@ function openPhoto(itemKey,autoLaunch=false,imageId=null){
   state.qualityRunId++;
 
   const count=savedImageCount(item);
+  const min=requiredPhotoCount(item);
   $('photoTitle').textContent=existing?`${item.title} — Photo ${itemImages(item).findIndex(img=>img.id===imageId)+1}`:`${item.title} — Add Photo`;
-  $('photoHelp').textContent=count?`${item.help} You currently have ${count} ${count===1?'photo':'photos'} saved for this item.`:item.help;
+  $('photoHelp').textContent=count?`${item.help} You currently have ${count} ${count===1?'photo':'photos'} saved for this item. Unlimited additional photos are allowed.`:`${item.help} Unlimited photos are allowed for this item.`;
   $('photoNote').value=existing?.note||'';
   $('cameraInput').value='';
   $('previewImg').classList.add('hidden');
   $('qualityBox').className='quality hidden';
   $('okPhotoBtn').textContent='OK / Save Photo';
   $('okPhotoBtn').disabled=!state.pendingDataUrl;
-  $('takePhotoBtn').textContent=existing?'📷 Retake This Photo':'📷 Take Photo';
-  $('nextChecklistBtn').textContent=`Done With ${item.title} — Next →`;
+  $('takePhotoBtn').textContent=existing?'📷 Retake This Photo':count?`📷 Take Another ${item.title} Photo`:'📷 Take Photo';
+  $('nextChecklistBtn').textContent=count<min?`Next Checklist Item (${count}/${min} saved) →`:`Done With ${item.title} — Next →`;
   $('cameraHint').classList.toggle('hidden',!!existing);
-  $('markMissingBtn').textContent=count&&!existing?'Cancel Add Photo':'Cannot Get Photo';
+  $('markMissingBtn').textContent=count&&!existing?'Cancel Add Photo':item.conditional?'Not Present / N/A':'Cannot Get Photo';
 
   if(state.pendingDataUrl){
     $('previewImg').src=state.pendingDataUrl;
@@ -668,13 +706,15 @@ async function commitPendingPhoto(){
   if(!isNew && image.dataUrl && image.id!==imageId){
     await removeStoredPhoto(state.current.id,itemKey,image);
   }
+  if(!isNew && (image.storageItemKey || image.legacyStorageKey)) await removeStoredPhoto(state.current.id,itemKey,image);
   image.dataUrl=state.pendingDataUrl;
   image.hasPhoto=true;
   image.quality=state.pendingQuality;
   image.note=$('photoNote').value.trim();
   image.departureQualityOverride=false;
   image.legacyStorageKey=false;
-  item.status='done';
+  image.storageItemKey=null;
+  item.status=savedImageCount(item)>=requiredPhotoCount(item)?'done':'open';
   item.note='';
   await storePhoto(state.current.id,itemKey,image.id,image.dataUrl);
   save();
@@ -692,11 +732,14 @@ function stayOnCurrentItemAfterSave(itemKey){
   }
   openPhoto(itemKey,false,null);
   const count=savedImageCount(item);
+  const min=requiredPhotoCount(item);
   const box=$('qualityBox');
-  box.className='quality good';
-  box.innerHTML=`<strong>✓ ${count===1?'Photo':'Photos'} saved for ${item.title}</strong><p>You now have ${count} ${count===1?'photo':'photos'} for this item. Tap Take Photo for another ${item.title} picture, or tap Next Checklist Item when you are ready to move on.</p>`;
+  box.className=count>=min?'quality good':'quality warn';
+  const requirement=count>=min?'Requirement met.':`${count} of ${min} required photos saved — ${min-count} more needed.`;
+  box.innerHTML=`<strong>✓ ${count===1?'Photo':'Photos'} saved for ${item.title}</strong><p>${requirement} Tap Take Photo for another ${item.title} picture, or tap Next Checklist Item when you are ready to move on.</p>`;
   box.classList.remove('hidden');
   $('takePhotoBtn').textContent=`📷 Take Another ${item.title} Photo`;
+  $('nextChecklistBtn').textContent=count<min?`Next Checklist Item (${count}/${min} saved) →`:`Done With ${item.title} — Next →`;
   $('nextChecklistBtn').classList.remove('hidden');
 }
 
@@ -748,7 +791,7 @@ function getDepartureGroups(){
 async function markMissingFromDeparture(itemKey){
   const item=state.current && state.current.photos[itemKey];
   if(!item || itemHasPhotos(item)) return;
-  item.note=item.note||'Photo could not be obtained or item was not present.';
+  item.note=item.note||(item.conditional?'Item not present or not applicable.':'Photo could not be obtained.');
   item.status='missing';
   clearDepartureOverride();
   save();
@@ -818,12 +861,14 @@ function departureCheck(){
       const label=document.createElement('strong');
       label.textContent=`${item.section}: ${item.title}`;
       const note=document.createElement('p');
-      note.textContent='No completed photo is saved for this checklist item.';
+      const count=savedImageCount(item);
+      const min=requiredPhotoCount(item);
+      note.textContent=count?`${count} of ${min} required photos saved. ${min-count} more needed.`:'No completed photo is saved for this checklist item.';
       const actions=document.createElement('div');
       actions.className='departure-actions';
       actions.append(
-        makeDepartureAction('📷 Take Photo','primary',()=>openPhoto(item.key,true,null)),
-        makeDepartureAction('Cannot Obtain','warning',()=>markMissingFromDeparture(item.key))
+        makeDepartureAction(count?'📷 Add Photo':'📷 Take Photo','primary',()=>openPhoto(item.key,true,null)),
+        makeDepartureAction(item.conditional?'Not Present / N/A':'Cannot Obtain','warning',()=>markMissingFromDeparture(item.key))
       );
       card.append(label,note,actions);
       box.appendChild(card);
@@ -967,7 +1012,7 @@ $('markMissingBtn').onclick=async()=>{
     show('dashboardScreen');
     return;
   }
-  item.note=$('photoNote').value.trim()||'Photo could not be obtained or item was not present.';
+  item.note=$('photoNote').value.trim()||(item.conditional?'Item not present or not applicable.':'Photo could not be obtained.');
   item.status='missing';
   clearDepartureOverride();
   save();
@@ -989,6 +1034,6 @@ $('installBtn').onclick=async()=>{
   }
 };
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('sw.js?v=2.1.0-build-012',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
+  navigator.serviceWorker.register('sw.js?v=2.1.0-build-014',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
 }
 renderSaved();
