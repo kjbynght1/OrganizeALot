@@ -43,3 +43,23 @@
 .departure-save-anyway{background:var(--bad);color:#fff}
 .departure-footer p{font-size:13px;line-height:1.4;text-align:center;margin:8px 0 0}
 @media(max-width:420px){.departure-actions{grid-template-columns:1fr}}
+
+/* Build 011: multiple photos per checklist item + exterior/interior sections */
+.checklist-help{margin:-6px 0 14px;line-height:1.45}
+.checklist-section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:18px 2px 2px;padding:10px 4px 7px;border-bottom:2px solid var(--accent2)}
+.checklist-section-heading:first-child{margin-top:4px}
+.checklist-section-heading h3{margin:0;font-size:20px}
+.checklist-section-heading span{font-size:12px;font-weight:850;color:var(--muted);background:#1e293b;padding:5px 8px;border-radius:999px}
+.photo-item{margin:0}
+.photo-row.done .status{font-size:13px;min-width:34px}
+.add-photo-btn{background:var(--accent2);color:#082f49;padding:8px 10px!important;font-size:13px!important;white-space:nowrap}
+.taken-photo-card-heading>div{display:flex;flex-direction:column;gap:2px}
+.taken-photo-card-heading small{color:var(--muted);font-size:12px}
+.gallery-card-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px}
+.gallery-card-actions button{width:100%;margin:0;font-size:14px;padding:10px 8px}
+.gallery-card-actions .delete-photo-btn{display:block;width:100%;margin:0;background:var(--bad);color:#fff}
+@media(max-width:430px){
+  .photo-row{align-items:flex-start}
+  .photo-row .info small{display:block;line-height:1.35;margin-top:3px}
+  .add-photo-btn,.photo-row .secondary{flex:0 0 auto}
+}
