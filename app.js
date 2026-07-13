@@ -158,7 +158,7 @@ function renderDashboard(){
    info.className='info';
    const title=document.createElement('strong'); title.textContent=p.title;
    const help=document.createElement('small');
-   help.textContent=p.status==='done'?'Saved — picture shown directly below':p.status==='missing'?'Marked unobtainable':p.help;
+   help.textContent=p.status==='done'?'Saved — shown in Photos Taken below':p.status==='missing'?'Marked unobtainable':p.help;
    info.append(title,help);
    const openBtn=document.createElement('button');
    openBtn.className='secondary';
@@ -167,12 +167,46 @@ function renderDashboard(){
    row.append(status,info,openBtn);
    item.appendChild(row);
 
-   const preview=document.createElement('div');
-   preview.className='inline-photo-preview';
-   if(p.status==='done' && p.dataUrl){
+   list.appendChild(item);
+ });
+
+ renderTakenPhotosGallery(c, photos);
+}
+
+function renderTakenPhotosGallery(inspection, photos){
+ const gallery=$('takenPhotosGallery');
+ const count=$('takenPhotosCount');
+ if(!gallery || !count) return;
+ gallery.innerHTML='';
+ const saved=photos.filter(p=>p.status==='done' && (p.dataUrl || p.hasPhoto));
+ count.textContent=`${saved.length} ${saved.length===1?'photo':'photos'}`;
+
+ if(!saved.length){
+   const empty=document.createElement('p');
+   empty.className='taken-photos-empty';
+   empty.textContent='No pictures taken yet. Your saved pictures will appear here automatically.';
+   gallery.appendChild(empty);
+   return;
+ }
+
+ saved.forEach((p,index)=>{
+   const card=document.createElement('article');
+   card.className='taken-photo-card';
+
+   const heading=document.createElement('div');
+   heading.className='taken-photo-card-heading';
+   const number=document.createElement('span');
+   number.className='taken-photo-number';
+   number.textContent=String(index+1);
+   const title=document.createElement('strong');
+   title.textContent=p.title;
+   heading.append(number,title);
+   card.appendChild(heading);
+
+   if(p.dataUrl){
      const imgBtn=document.createElement('button');
      imgBtn.type='button';
-     imgBtn.className='inline-photo-image-button';
+     imgBtn.className='taken-photo-image-button';
      imgBtn.setAttribute('aria-label',`View ${p.title} photo`);
      const img=document.createElement('img');
      img.src=p.dataUrl;
@@ -180,29 +214,27 @@ function renderDashboard(){
      img.loading='eager';
      imgBtn.appendChild(img);
      imgBtn.onclick=()=>openPhoto(p.key,false);
-
-     const del=document.createElement('button');
-     del.type='button';
-     del.className='delete-photo-btn';
-     del.textContent='🗑 Delete Photo';
-     del.onclick=()=>deletePhoto(p.key);
-     preview.append(imgBtn,del);
-   }else if(p.status==='done' && p.hasPhoto){
+     card.appendChild(imgBtn);
+   }else{
      const loading=document.createElement('div');
      loading.className='photo-loading';
      loading.textContent='Loading saved picture…';
-     preview.appendChild(loading);
-     getStoredPhoto(c.id,p.key).then(dataUrl=>{
-       if(dataUrl && state.current && state.current.id===c.id){
+     card.appendChild(loading);
+     getStoredPhoto(inspection.id,p.key).then(dataUrl=>{
+       if(dataUrl && state.current && state.current.id===inspection.id){
          p.dataUrl=dataUrl;
          renderDashboard();
        }
      });
-   }else{
-     preview.classList.add('hidden');
    }
-   item.appendChild(preview);
-   list.appendChild(item);
+
+   const del=document.createElement('button');
+   del.type='button';
+   del.className='delete-photo-btn';
+   del.textContent='🗑 Delete Photo';
+   del.onclick=()=>deletePhoto(p.key);
+   card.appendChild(del);
+   gallery.appendChild(card);
  });
 }
 async function deletePhoto(key){
