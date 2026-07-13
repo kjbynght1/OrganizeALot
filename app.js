@@ -37,7 +37,7 @@ function renderDashboard(){
  photos.forEach(p=>{ const row=document.createElement('div'); row.className=`photo-row ${p.status==='done'?'done':p.status==='missing'?'missing':''}`; row.innerHTML=`<div class="status">${p.status==='done'?'✓':p.status==='missing'?'!':'•'}</div><div class="info"><strong>${p.title}</strong><small>${p.status==='done'?'Saved':p.status==='missing'?'Marked unobtainable':p.help}</small></div><button class="secondary">Open</button>`; row.querySelector('button').onclick=()=>openPhoto(p.key); list.appendChild(row); });
 }
 function firstOpen(){ return Object.values(state.current.photos).find(p=>p.status==='open'); }
-function openPhoto(key){ state.pendingPhoto=key; const p=state.current.photos[key]; $('photoTitle').textContent=p.title; $('photoHelp').textContent=p.help; $('photoNote').value=p.note||''; $('cameraInput').value=''; $('previewImg').classList.add('hidden'); $('qualityBox').className='quality hidden'; $('okPhotoBtn').disabled=!p.dataUrl; if(p.dataUrl){ $('previewImg').src=p.dataUrl; $('previewImg').classList.remove('hidden'); runQuality(p.dataUrl); } show('cameraScreen'); setTimeout(()=>$('cameraInput').click(),150); }
+function openPhoto(key){ state.pendingPhoto=key; const p=state.current.photos[key]; $('photoTitle').textContent=p.title; $('photoHelp').textContent=p.help; $('photoNote').value=p.note||''; $('cameraInput').value=''; $('previewImg').classList.add('hidden'); $('qualityBox').className='quality hidden'; $('okPhotoBtn').disabled=!p.dataUrl; if(p.dataUrl){ $('previewImg').src=p.dataUrl; $('previewImg').classList.remove('hidden'); runQuality(p.dataUrl); } show('cameraScreen'); }
 function runQuality(dataUrl){
  const img=new Image(); img.onload=()=>{
    const mp=(img.naturalWidth*img.naturalHeight)/1000000; let msg=[], cls='good';
@@ -49,7 +49,7 @@ function runQuality(dataUrl){
  }; img.src=dataUrl;
 }
 function readFile(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); }); }
-async function onCamera(e){ const file=e.target.files[0]; if(!file) return; const dataUrl=await readFile(file); const p=state.current.photos[state.pendingPhoto]; p.dataUrl=dataUrl; p.status='preview'; save(); $('previewImg').src=dataUrl; $('previewImg').classList.remove('hidden'); $('okPhotoBtn').disabled=false; runQuality(dataUrl); }
+async function onCamera(e){ const file=e.target.files[0]; if(!file) return; const dataUrl=await readFile(file); const p=state.current.photos[state.pendingPhoto]; p.dataUrl=dataUrl; p.status='preview'; $('previewImg').src=dataUrl; $('previewImg').classList.remove('hidden'); $('okPhotoBtn').disabled=false; runQuality(dataUrl); }
 function nextAfterSave(){ const n=firstOpen(); if(n){ openPhoto(n.key); setTimeout(()=>$('cameraInput').click(),200); } else { save(); renderDashboard(); show('dashboardScreen'); } }
 function departureCheck(){
  const photos=Object.values(state.current.photos); const missing=photos.filter(p=>p.status==='open'); const marked=photos.filter(p=>p.status==='missing'); const done=photos.filter(p=>p.status==='done');
@@ -69,7 +69,7 @@ $('startBtn').onclick=()=>{ const c=state.current; c.inspectionId=$('inspectionI
 $('openMapBtn').onclick=()=>{ const q=encodeURIComponent($('address').value.trim()); if(q) window.open(`https://www.google.com/maps/search/?api=1&query=${q}`,'_blank'); };
 $('takeNextBtn').onclick=()=>{ const p=firstOpen(); if(p) openPhoto(p.key); else departureCheck(); };
 $('cameraInput').addEventListener('change', onCamera);
-$('okPhotoBtn').onclick=()=>{ const p=state.current.photos[state.pendingPhoto]; p.note=$('photoNote').value.trim(); p.status='done'; save(); renderDashboard(); nextAfterSave(); };
+$('okPhotoBtn').onclick=()=>{ const p=state.current.photos[state.pendingPhoto]; p.note=$('photoNote').value.trim(); p.status='done'; save(); nextAfterSave(); };
 $('retakeBtn').onclick=()=>{ $('cameraInput').value=''; $('cameraInput').click(); };
 $('markMissingBtn').onclick=()=>{ const p=state.current.photos[state.pendingPhoto]; p.note=$('photoNote').value.trim()||'Photo could not be obtained.'; p.status='missing'; p.dataUrl=null; save(); nextAfterSave(); };
 $('saveBtn').onclick=save; $('departureBtn').onclick=departureCheck; $('exportBtn').onclick=exportReport;
@@ -77,5 +77,3 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault(); state.defe
 $('installBtn').onclick=async()=>{ if(state.deferredInstall){ state.deferredInstall.prompt(); state.deferredInstall=null; $('installBtn').classList.add('hidden'); }};
 if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
 renderSaved();
-
-document.getElementById('launchCameraBtn')?.addEventListener('click',()=>document.getElementById('cameraInput').click());
