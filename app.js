@@ -22,7 +22,28 @@ function newInspection(type){
   state.current = { id:uid(), type, inspectionId:'', address:'', inspector:'Chris Roberts', created:new Date().toISOString(), updated:new Date().toISOString(), photos:{} };
   photosFor(type).forEach(([key,title,help])=> state.current.photos[key]={key,title,help,status:'open',dataUrl:null,note:'',quality:null});
 }
-function save(){ if(!state.current) return; state.current.updated=new Date().toISOString(); localStorage.setItem(state.current.id,JSON.stringify(state.current)); renderDashboard(); }
+function save(){
+ if(!state.current) return false;
+ state.current.updated=new Date().toISOString();
+ try{
+   localStorage.setItem(state.current.id,JSON.stringify(state.current));
+   renderDashboard();
+   return true;
+ }catch(err){
+   console.warn('Full inspection save failed; saving lightweight metadata instead.',err);
+   try{
+     const lightweight=JSON.parse(JSON.stringify(state.current));
+     Object.values(lightweight.photos||{}).forEach(p=>{
+       if(p.dataUrl){ p.hasPhoto=true; p.dataUrl=null; }
+     });
+     localStorage.setItem(state.current.id,JSON.stringify(lightweight));
+   }catch(fallbackErr){
+     console.warn('Lightweight save also failed.',fallbackErr);
+   }
+   renderDashboard();
+   return false;
+ }
+}
 function allInspections(){ return Object.keys(localStorage).filter(k=>k.startsWith('insp_')).map(k=>JSON.parse(localStorage.getItem(k))).sort((a,b)=>new Date(b.updated)-new Date(a.updated)); }
 function renderSaved(){
  const box=$('savedList'); box.innerHTML=''; const items=allInspections();
@@ -73,7 +94,56 @@ function runQuality(dataUrl){
  }; img.src=dataUrl;
 }
 function readFile(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); }); }
-async function onCamera(e){ const file=e.target.files[0]; if(!file) return; const dataUrl=await readFile(file); const p=state.current.photos[state.pendingPhoto]; p.dataUrl=dataUrl; p.status='preview'; $('previewImg').src=dataUrl; $('previewImg').classList.remove('hidden'); $('okPhotoBtn').disabled=false; runQuality(dataUrl); }
+function loadImageFromFile(file){
+ return new Promise((resolve,reject)=>{
+   const url=URL.createObjectURL(file);
+   const img=new Image();
+   img.onload=()=>{ URL.revokeObjectURL(url); resolve(img); };
+   img.onerror=()=>{ URL.revokeObjectURL(url); reject(new Error('Could not read photo.')); };
+   img.src=url;
+ });
+}
+async function optimizePhoto(file){
+ try{
+   const img=await loadImageFromFile(file);
+   const maxDim=1600;
+   const largest=Math.max(img.naturalWidth,img.naturalHeight);
+   const scale=largest>maxDim?maxDim/largest:1;
+   const width=Math.max(1,Math.round(img.naturalWidth*scale));
+   const height=Math.max(1,Math.round(img.naturalHeight*scale));
+   const canvas=document.createElement('canvas');
+   canvas.width=width; canvas.height=height;
+   const ctx=canvas.getContext('2d',{alpha:false});
+   ctx.drawImage(img,0,0,width,height);
+   return canvas.toDataURL('image/jpeg',0.76);
+ }catch(err){
+   console.warn('Photo optimization failed; using original image.',err);
+   return readFile(file);
+ }
+}
+async function onCamera(e){
+ const file=e.target.files[0];
+ if(!file || !state.current || !state.pendingPhoto) return;
+ const btn=$('okPhotoBtn');
+ btn.disabled=true;
+ btn.textContent='Processing photo…';
+ try{
+   const dataUrl=await optimizePhoto(file);
+   const p=state.current.photos[state.pendingPhoto];
+   p.dataUrl=dataUrl;
+   p.hasPhoto=true;
+   p.status='preview';
+   $('previewImg').src=dataUrl;
+   $('previewImg').classList.remove('hidden');
+   runQuality(dataUrl);
+ }catch(err){
+   console.error(err);
+   alert('The photo could not be processed. Please retake it.');
+ }finally{
+   btn.textContent='OK / Save Photo';
+   btn.disabled=!(state.current && state.pendingPhoto && state.current.photos[state.pendingPhoto] && state.current.photos[state.pendingPhoto].dataUrl);
+ }
+}
 function nextAfterSave(){
  const n=firstOpen();
  if(n){
@@ -103,11 +173,20 @@ $('openMapBtn').onclick=()=>{ const q=encodeURIComponent($('address').value.trim
 $('takeNextBtn').onclick=()=>{ const p=firstOpen(); if(p) openPhoto(p.key,true); else departureCheck(); };
 $('cameraInput').addEventListener('change', onCamera);
 $('takePhotoBtn').onclick=launchCamera;
-$('okPhotoBtn').onclick=()=>{ const p=state.current.photos[state.pendingPhoto]; p.note=$('photoNote').value.trim(); p.status='done'; save(); nextAfterSave(); };
+$('okPhotoBtn').onclick=()=>{
+ if(!state.current || !state.pendingPhoto) return;
+ const p=state.current.photos[state.pendingPhoto];
+ if(!p || !p.dataUrl) return;
+ p.note=$('photoNote').value.trim();
+ p.status='done';
+ p.hasPhoto=true;
+ save();
+ nextAfterSave();
+};
 $('retakeBtn').onclick=launchCamera;
 $('markMissingBtn').onclick=()=>{ const p=state.current.photos[state.pendingPhoto]; p.note=$('photoNote').value.trim()||'Photo could not be obtained.'; p.status='missing'; p.dataUrl=null; save(); nextAfterSave(); };
 $('saveBtn').onclick=save; $('departureBtn').onclick=departureCheck; $('exportBtn').onclick=exportReport;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault(); state.deferredInstall=e; $('installBtn').classList.remove('hidden');});
 $('installBtn').onclick=async()=>{ if(state.deferredInstall){ state.deferredInstall.prompt(); state.deferredInstall=null; $('installBtn').classList.add('hidden'); }};
-if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=2.1.0-build-002',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=2.1.0-build-003',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
 renderSaved();
