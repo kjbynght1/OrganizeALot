@@ -4,15 +4,15 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0f172a" />
-  <title>OrganizeALot v2.1.0 Build 011</title>
-  <link rel="manifest" href="manifest.json?v=2.1.0-build-011" />
-  <link rel="stylesheet" href="styles.css?v=2.1.0-build-011" />
+  <title>OrganizeALot v2.1.0 Build 012</title>
+  <link rel="manifest" href="manifest.json?v=2.1.0-build-012" />
+  <link rel="stylesheet" href="styles.css?v=2.1.0-build-012" />
 </head>
 <body>
   <header class="app-header">
     <div>
       <h1>OrganizeALot</h1>
-      <p>Residential Inspection Assistant v2.1.0 · Build 011</p>
+      <p>Residential Inspection Assistant v2.1.0 · Build 012</p>
     </div>
     <button id="installBtn" class="small hidden">Install</button>
   </header>
@@ -93,7 +93,7 @@
       <button class="back" data-screen="dashboardScreen">← Back</button>
       <h2 id="photoTitle">Photo</h2>
       <p id="photoHelp" class="muted"></p>
-      <div class="notice auto-quality-note"><strong>Auto quality mode is ON.</strong> Passing photos save automatically and advance to the next required photo.</div>
+      <div class="notice auto-quality-note"><strong>Auto quality mode is ON.</strong> Passing photos save automatically and stay on the current checklist item so you can take as many pictures as needed. Tap Next Checklist Item only when you are ready to move on.</div>
       <div class="capture-box">
         <input id="cameraInput" class="camera-native-input" type="file" accept="image/*" capture="environment" />
         <button id="takePhotoBtn" class="primary camera-trigger">📷 Take Photo</button>
@@ -107,6 +107,7 @@
       <div class="actions">
         <button id="okPhotoBtn" class="primary" disabled>OK / Save Photo</button>
         <button id="retakeBtn" class="secondary">Retake</button>
+        <button id="nextChecklistBtn" class="secondary">Next Checklist Item →</button>
         <button id="markMissingBtn" class="warning">Cannot Get Photo</button>
       </div>
     </section>
@@ -123,6 +124,6 @@
     <button class="saved-item"></button>
   </template>
 
-  <script src="app.js?v=2.1.0-build-011"></script>
+  <script src="app.js?v=2.1.0-build-012"></script>
 </body>
 </html>

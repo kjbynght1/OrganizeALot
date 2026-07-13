@@ -468,6 +468,7 @@ function openPhoto(itemKey,autoLaunch=false,imageId=null){
   $('okPhotoBtn').textContent='OK / Save Photo';
   $('okPhotoBtn').disabled=!state.pendingDataUrl;
   $('takePhotoBtn').textContent=existing?'📷 Retake This Photo':'📷 Take Photo';
+  $('nextChecklistBtn').textContent=`Done With ${item.title} — Next →`;
   $('cameraHint').classList.toggle('hidden',!!existing);
   $('markMissingBtn').textContent=count&&!existing?'Cancel Add Photo':'Cannot Get Photo';
 
@@ -569,7 +570,7 @@ async function runQuality(dataUrl,{autoSave=false}={}){
       if(autoSave){
         await commitPendingPhoto();
         setTimeout(()=>{
-          if(runId===state.qualityRunId) nextAfterSave();
+          if(runId===state.qualityRunId) stayOnCurrentItemAfterSave(pending.itemKey);
         },450);
       }
     }else{
@@ -680,10 +681,42 @@ async function commitPendingPhoto(){
   return true;
 }
 
-function nextAfterSave(){
+function stayOnCurrentItemAfterSave(itemKey){
   state.pendingDataUrl=null;
   state.pendingQuality=null;
-  const next=firstOpen();
+  const item=state.current && state.current.photos[itemKey];
+  if(!item){
+    renderDashboard();
+    show('dashboardScreen');
+    return;
+  }
+  openPhoto(itemKey,false,null);
+  const count=savedImageCount(item);
+  const box=$('qualityBox');
+  box.className='quality good';
+  box.innerHTML=`<strong>✓ ${count===1?'Photo':'Photos'} saved for ${item.title}</strong><p>You now have ${count} ${count===1?'photo':'photos'} for this item. Tap Take Photo for another ${item.title} picture, or tap Next Checklist Item when you are ready to move on.</p>`;
+  box.classList.remove('hidden');
+  $('takePhotoBtn').textContent=`📷 Take Another ${item.title} Photo`;
+  $('nextChecklistBtn').classList.remove('hidden');
+}
+
+function nextOpenAfter(itemKey){
+  const items=Object.values(state.current?.photos||{});
+  const currentIndex=items.findIndex(item=>item.key===itemKey);
+  for(let i=currentIndex+1;i<items.length;i++){
+    if(itemStatus(items[i])==='open') return items[i];
+  }
+  for(let i=0;i<currentIndex;i++){
+    if(itemStatus(items[i])==='open') return items[i];
+  }
+  return null;
+}
+
+function advanceFromCurrent(){
+  const currentKey=state.pendingPhoto?.itemKey||null;
+  state.pendingDataUrl=null;
+  state.pendingQuality=null;
+  const next=currentKey?nextOpenAfter(currentKey):firstOpen();
   if(next){
     openPhoto(next.key,true,null);
   }else{
@@ -914,10 +947,12 @@ $('cameraInput').addEventListener('change',onCamera);
 $('takePhotoBtn').onclick=launchCamera;
 $('okPhotoBtn').onclick=async()=>{
   if(!state.pendingDataUrl) return;
+  const itemKey=state.pendingPhoto?.itemKey;
   await commitPendingPhoto();
-  nextAfterSave();
+  if(itemKey) stayOnCurrentItemAfterSave(itemKey);
 };
 $('retakeBtn').onclick=launchCamera;
+$('nextChecklistBtn').onclick=advanceFromCurrent;
 $('markMissingBtn').onclick=async()=>{
   if(!state.current||!state.pendingPhoto) return;
   const item=state.current.photos[state.pendingPhoto.itemKey];
@@ -936,7 +971,7 @@ $('markMissingBtn').onclick=async()=>{
   item.status='missing';
   clearDepartureOverride();
   save();
-  nextAfterSave();
+  advanceFromCurrent();
 };
 $('saveBtn').onclick=save;
 $('departureBtn').onclick=departureCheck;
@@ -954,6 +989,6 @@ $('installBtn').onclick=async()=>{
   }
 };
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('sw.js?v=2.1.0-build-011',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
+  navigator.serviceWorker.register('sw.js?v=2.1.0-build-012',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
 }
 renderSaved();
