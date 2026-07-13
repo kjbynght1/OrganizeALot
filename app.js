@@ -12,7 +12,7 @@ const OBS_PHOTOS = [
 const STANDARD_PHOTOS = [
   ['front','Front','Exterior front photo.'],['left','Left Side','Exterior left side.'],['rear','Rear','Exterior rear.'],['right','Right Side','Exterior right side.'],['roof','Roof','Roof overview.'],['interior','Interior','Interior photos as required.']
 ];
-const state = { current:null, pendingPhoto:null, deferredInstall:null };
+const state = { current:null, pendingPhoto:null, deferredInstall:null, qualityRunId:0 };
 const $ = id => document.getElementById(id);
 const screens = ['menuScreen','setupScreen','dashboardScreen','cameraScreen','reviewScreen'];
 function show(id){ screens.forEach(s=>$(s).classList.toggle('active',s===id)); if(id==='menuScreen') renderSaved(); window.scrollTo(0,0); }
@@ -83,15 +83,129 @@ function openPhoto(key, autoLaunch=false){
   show('cameraScreen');
   if(autoLaunch) launchCamera();
 }
-function runQuality(dataUrl){
- const img=new Image(); img.onload=()=>{
-   const mp=(img.naturalWidth*img.naturalHeight)/1000000; let msg=[], cls='good';
-   if(mp<1){ msg.push('Photo may be low resolution.'); cls='warn'; } else msg.push('Resolution looks usable.');
-   if(img.naturalWidth<img.naturalHeight && ['front','rear','left','right','roof'].includes(state.pendingPhoto)){ msg.push('Portrait photo is OK, but landscape may show more of the structure.'); cls=cls==='good'?'warn':cls; }
-   msg.push('Review for blur, glare, darkness, and sun distortion before pressing OK.');
-   const box=$('qualityBox'); box.className=`quality ${cls}`; box.innerHTML=`<strong>AI quality check</strong><p>${msg.join(' ')}</p>`; box.classList.remove('hidden');
-   state.current.photos[state.pendingPhoto].quality=msg.join(' ');
- }; img.src=dataUrl;
+function analyzeImageQuality(dataUrl){
+ return new Promise((resolve,reject)=>{
+   const img=new Image();
+   img.onload=()=>{
+     try{
+       const mp=(img.naturalWidth*img.naturalHeight)/1000000;
+       const maxW=320, maxH=240;
+       const scale=Math.min(1,maxW/img.naturalWidth,maxH/img.naturalHeight);
+       const width=Math.max(40,Math.round(img.naturalWidth*scale));
+       const height=Math.max(40,Math.round(img.naturalHeight*scale));
+       const canvas=document.createElement('canvas');
+       canvas.width=width; canvas.height=height;
+       const ctx=canvas.getContext('2d',{willReadFrequently:true,alpha:false});
+       ctx.drawImage(img,0,0,width,height);
+       const rgba=ctx.getImageData(0,0,width,height).data;
+       const gray=new Float32Array(width*height);
+       let sum=0, sumSq=0, dark=0, bright=0;
+       for(let i=0,p=0;i<rgba.length;i+=4,p++){
+         const y=0.299*rgba[i]+0.587*rgba[i+1]+0.114*rgba[i+2];
+         gray[p]=y; sum+=y; sumSq+=y*y;
+         if(y<35) dark++;
+         if(y>245) bright++;
+       }
+       const pixels=gray.length;
+       const average=sum/pixels;
+       const contrast=Math.sqrt(Math.max(0,sumSq/pixels-average*average));
+       let lapSum=0, lapSq=0, lapCount=0;
+       for(let y=1;y<height-1;y++){
+         const row=y*width;
+         for(let x=1;x<width-1;x++){
+           const i=row+x;
+           const lap=4*gray[i]-gray[i-1]-gray[i+1]-gray[i-width]-gray[i+width];
+           lapSum+=lap; lapSq+=lap*lap; lapCount++;
+         }
+       }
+       const lapMean=lapCount?lapSum/lapCount:0;
+       const sharpness=lapCount?Math.max(0,lapSq/lapCount-lapMean*lapMean):0;
+       const darkPct=dark/pixels*100;
+       const brightPct=bright/pixels*100;
+
+       const failures=[];
+       if(mp<0.6) failures.push('resolution is too low');
+       if(average<42 || darkPct>62) failures.push('photo is too dark');
+       if(average>225 || brightPct>42) failures.push('photo is overexposed');
+       if(contrast<13) failures.push('photo has very low contrast');
+       if(sharpness<55) failures.push('photo appears blurry');
+
+       resolve({
+         pass: failures.length===0,
+         failures,
+         mp,
+         average,
+         contrast,
+         sharpness,
+         darkPct,
+         brightPct,
+         orientation: img.naturalWidth>=img.naturalHeight?'landscape':'portrait'
+       });
+     }catch(err){ reject(err); }
+   };
+   img.onerror=()=>reject(new Error('Could not analyze photo.'));
+   img.src=dataUrl;
+ });
+}
+function qualitySummary(result){
+ const sharpLabel=result.sharpness>=140?'very sharp':result.sharpness>=80?'sharp':'usable';
+ const lightLabel=result.average<75?'a little dark':result.average>195?'a little bright':'good lighting';
+ return `Sharpness: ${sharpLabel}. Lighting: ${lightLabel}. Resolution: ${result.mp.toFixed(1)} MP.`;
+}
+async function runQuality(dataUrl,{autoSave=false}={}){
+ const runId=++state.qualityRunId;
+ const key=state.pendingPhoto;
+ const box=$('qualityBox');
+ box.className='quality';
+ box.innerHTML='<strong>Automatic quality check</strong><p>Checking blur, lighting, overexposure, contrast, and resolution…</p>';
+ box.classList.remove('hidden');
+ try{
+   const result=await analyzeImageQuality(dataUrl);
+   if(runId!==state.qualityRunId || key!==state.pendingPhoto) return result;
+   const p=state.current && state.current.photos[key];
+   if(!p) return result;
+   p.quality={
+     pass:result.pass,
+     checkedAt:new Date().toISOString(),
+     sharpness:Math.round(result.sharpness),
+     brightness:Math.round(result.average),
+     contrast:Math.round(result.contrast),
+     darkPct:Math.round(result.darkPct),
+     brightPct:Math.round(result.brightPct),
+     resolutionMP:Number(result.mp.toFixed(2)),
+     details:result.pass?qualitySummary(result):result.failures.join('; ')
+   };
+
+   if(result.pass){
+     box.className='quality good';
+     box.innerHTML=`<strong>✓ Quality passed — auto-saving</strong><p>${qualitySummary(result)}</p>`;
+     $('okPhotoBtn').textContent='✓ Passed — Auto-saving…';
+     $('okPhotoBtn').disabled=true;
+     if(autoSave){
+       p.note=$('photoNote').value.trim();
+       p.status='done';
+       p.hasPhoto=true;
+       save();
+       setTimeout(()=>{
+         if(runId===state.qualityRunId && key===state.pendingPhoto) nextAfterSave();
+       },450);
+     }
+   }else{
+     box.className='quality bad';
+     box.innerHTML=`<strong>⚠ Quality check needs attention</strong><p>${result.failures.join('. ')}. Retake the photo, or save it manually if it is still usable.</p>`;
+     $('okPhotoBtn').textContent='Save Anyway';
+     $('okPhotoBtn').disabled=false;
+   }
+   return result;
+ }catch(err){
+   console.warn('Automatic quality check failed.',err);
+   if(runId!==state.qualityRunId || key!==state.pendingPhoto) return null;
+   box.className='quality warn';
+   box.innerHTML='<strong>Quality check unavailable</strong><p>I could not automatically check this photo. Review it and save manually or retake it.</p>';
+   $('okPhotoBtn').textContent='Save Photo';
+   $('okPhotoBtn').disabled=false;
+   return null;
+ }
 }
 function readFile(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); }); }
 function loadImageFromFile(file){
@@ -127,6 +241,7 @@ async function onCamera(e){
  const btn=$('okPhotoBtn');
  btn.disabled=true;
  btn.textContent='Processing photo…';
+ let result=null;
  try{
    const dataUrl=await optimizePhoto(file);
    const p=state.current.photos[state.pendingPhoto];
@@ -135,13 +250,16 @@ async function onCamera(e){
    p.status='preview';
    $('previewImg').src=dataUrl;
    $('previewImg').classList.remove('hidden');
-   runQuality(dataUrl);
+   result=await runQuality(dataUrl,{autoSave:true});
  }catch(err){
    console.error(err);
    alert('The photo could not be processed. Please retake it.');
  }finally{
-   btn.textContent='OK / Save Photo';
-   btn.disabled=!(state.current && state.pendingPhoto && state.current.photos[state.pendingPhoto] && state.current.photos[state.pendingPhoto].dataUrl);
+   if(!result || !result.pass){
+     const p=state.current && state.pendingPhoto ? state.current.photos[state.pendingPhoto] : null;
+     if(btn.textContent==='Processing photo…') btn.textContent='Save Photo';
+     btn.disabled=!(p && p.dataUrl);
+   }
  }
 }
 function nextAfterSave(){
@@ -188,5 +306,5 @@ $('markMissingBtn').onclick=()=>{ const p=state.current.photos[state.pendingPhot
 $('saveBtn').onclick=save; $('departureBtn').onclick=departureCheck; $('exportBtn').onclick=exportReport;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault(); state.deferredInstall=e; $('installBtn').classList.remove('hidden');});
 $('installBtn').onclick=async()=>{ if(state.deferredInstall){ state.deferredInstall.prompt(); state.deferredInstall=null; $('installBtn').classList.add('hidden'); }};
-if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=2.1.0-build-003',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js?v=2.1.0-build-004',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
 renderSaved();
