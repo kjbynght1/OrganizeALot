@@ -59,7 +59,8 @@ const screens = ['menuScreen','setupScreen','dashboardScreen','cameraScreen','re
 
 function show(id){
   screens.forEach(s=>$(s).classList.toggle('active',s===id));
-  if(id==='menuScreen') renderSaved();
+  if(id==='menuScreen') $('resumeSearch')?.addEventListener('input',renderSaved);
+renderSaved();
   window.scrollTo(0,0);
 }
 function uid(){ return 'insp_'+Date.now(); }
@@ -201,7 +202,7 @@ function ensurePhotoChecklist(inspection){
 function newInspection(type){
   state.current={
     id:uid(), type, inspectionId:'', address:'', inspector:'Chris Roberts',
-    created:new Date().toISOString(), updated:new Date().toISOString(), conditions:{basement:'unknown'}, resumeTarget:{screen:'dashboardScreen',itemKey:null}, photos:{}
+    created:new Date().toISOString(), updated:new Date().toISOString(), conditions:{basement:'unknown'}, photos:{}
   };
   photosFor(type).forEach(([key,title,help,section,minPhotos=1,conditional=false,unlimited=true])=>{
     state.current.photos[key]={key,title,help,section:section||'Exterior',minPhotos:Math.max(1,Number(minPhotos)||1),conditional:!!conditional,condition:conditional?'unknown':'present',unlimited:unlimited!==false,status:'open',note:'',images:[]};
@@ -288,8 +289,39 @@ async function hydrateInspectionPhotos(inspection){
   ));
 }
 
-function persistInspectionMetadata({render=false}={}){
+function hasRequiredInspectionIdentity(inspection){
+  return !!(
+    inspection &&
+    String(inspection.inspectionId||'').trim() &&
+    String(inspection.address||'').trim()
+  );
+}
+
+function removeInvalidSavedInspections(){
+  let removed=0;
+  Object.keys(localStorage)
+    .filter(key=>key.startsWith('insp_'))
+    .forEach(key=>{
+      try{
+        const inspection=JSON.parse(localStorage.getItem(key));
+        if(!hasRequiredInspectionIdentity(inspection)){
+          localStorage.removeItem(key);
+          removed++;
+        }
+      }catch{
+        localStorage.removeItem(key);
+        removed++;
+      }
+    });
+  return removed;
+}
+
+function save(){
   if(!state.current) return false;
+  if(!hasRequiredInspectionIdentity(state.current)){
+    console.warn('Inspection was not saved because Inspection ID and Address are both required.');
+    return false;
+  }
   ensurePhotoChecklist(state.current);
   state.current.updated=new Date().toISOString();
   try{
@@ -301,110 +333,106 @@ function persistInspectionMetadata({render=false}={}){
       });
     });
     localStorage.setItem(state.current.id,JSON.stringify(metadata));
-    if(render) renderDashboard();
+    renderDashboard();
     return true;
   }catch(err){
     console.warn('Inspection metadata save failed.',err);
-    if(render) renderDashboard();
+    renderDashboard();
     return false;
   }
 }
 
-function save(){ return persistInspectionMetadata({render:true}); }
-
-function setResumeTarget(screen='dashboardScreen',itemKey=null){
-  if(!state.current) return;
-  state.current.resumeTarget={screen,itemKey:itemKey||null,updatedAt:new Date().toISOString()};
-  persistInspectionMetadata({render:false});
-}
-
-function inspectionProgress(inspection){
-  ensurePhotoChecklist(inspection);
-  const items=Object.values(inspection.photos||{});
-  const complete=items.filter(item=>['done','missing','na'].includes(itemStatus(item))).length;
-  return {complete,total:items.length,pct:items.length?Math.round(complete/items.length*100):0};
-}
-
 function allInspections(){
+  removeInvalidSavedInspections();
   return Object.keys(localStorage)
     .filter(k=>k.startsWith('insp_'))
     .map(k=>{ try{return JSON.parse(localStorage.getItem(k));}catch{return null;} })
-    .filter(Boolean)
+    .filter(hasRequiredInspectionIdentity)
     .sort((a,b)=>new Date(b.updated)-new Date(a.updated));
+}
+
+function createSavedInspectionCard(item,isArchived=false){
+  const card=document.createElement('div');
+  card.className=`saved-item saved-resume-card${isArchived?' archived-saved-card':''}`;
+
+  const info=document.createElement('div');
+  info.className='saved-resume-info';
+  const title=document.createElement('strong');
+  title.textContent=`${item.type} — ${item.inspectionId}`;
+  const meta=document.createElement('small');
+  meta.textContent=`${item.address} · ${new Date(item.updated).toLocaleString()}`;
+  info.append(title,meta);
+
+  if(isArchived){
+    const badge=document.createElement('span');
+    badge.className='archive-badge';
+    badge.textContent='Archived';
+    info.appendChild(badge);
+  }
+
+  const resume=document.createElement('button');
+  resume.className='primary resume-inspection-btn';
+  resume.textContent='Resume Inspection';
+  resume.onclick=async()=>{
+    resume.disabled=true;
+    resume.textContent='Opening…';
+    try{
+      state.current=item;
+      ensurePhotoChecklist(state.current);
+      await hydrateInspectionPhotos(state.current);
+      renderDashboard();
+      show('dashboardScreen');
+    }catch(err){
+      console.error('Resume failed.',err);
+      resume.disabled=false;
+      resume.textContent='Resume Inspection';
+      alert('Could not reopen this inspection. Please try again.');
+    }
+  };
+
+  card.append(info,resume);
+  return card;
 }
 
 function renderSaved(){
   const box=$('savedList');
+  if(!box) return;
   box.innerHTML='';
+
   const query=($('resumeSearch')?.value||'').trim().toLowerCase();
   const all=allInspections();
-  const items=all.filter(item=>{
-    if(!query) return true;
-    return [item.inspectionId,item.address,item.type].some(value=>String(value||'').toLowerCase().includes(query));
-  });
-  if(!all.length){ box.innerHTML='<p class="muted">No saved inspections yet.</p>'; return; }
-  if(!items.length){ box.innerHTML='<p class="muted">No saved inspection matches that ID or address.</p>'; return; }
+  const newestSix=all.slice(0,6);
+  const archived=all.slice(6);
+  const matches=item=>!query || [item.inspectionId,item.address,item.type]
+    .some(value=>String(value||'').toLowerCase().includes(query));
+  const visibleNewest=newestSix.filter(matches);
+  const visibleArchived=archived.filter(matches);
 
-  items.forEach(item=>{
-    const progress=inspectionProgress(item);
-    const card=document.createElement('article');
-    card.className='saved-inspection-card';
-
-    const top=document.createElement('div');
-    top.className='saved-inspection-top';
-    const info=document.createElement('div');
-    const title=document.createElement('strong');
-    title.textContent=`${item.type} — ${item.inspectionId||'No ID'}`;
-    const address=document.createElement('span');
-    address.textContent=item.address||'No address';
-    info.append(title,address);
-    const badge=document.createElement('span');
-    badge.className='saved-progress-badge';
-    badge.textContent=`${progress.complete}/${progress.total}`;
-    top.append(info,badge);
-
-    const bar=document.createElement('div');
-    bar.className='saved-progress';
-    const fill=document.createElement('div');
-    fill.style.width=`${progress.pct}%`;
-    bar.appendChild(fill);
-
-    const meta=document.createElement('small');
-    meta.className='saved-inspection-meta';
-    meta.textContent=`${progress.pct}% complete · Last saved ${new Date(item.updated).toLocaleString()}`;
-
-    const resume=document.createElement('button');
-    resume.className='primary resume-inspection-btn';
-    resume.textContent='Resume Inspection';
-    resume.onclick=()=>resumeInspection(item);
-
-    card.append(top,bar,meta,resume);
-    box.appendChild(card);
-  });
-}
-
-async function resumeInspection(item){
-  state.current=item;
-  ensurePhotoChecklist(state.current);
-  await hydrateInspectionPhotos(state.current);
-  renderDashboard();
-  const target=state.current.resumeTarget||{};
-  if(target.screen==='cameraScreen' && target.itemKey && state.current.photos[target.itemKey]){
-    openPhoto(target.itemKey,false,null);
-    const resumeNote=$('qualityBox');
-    if(resumeNote){
-      resumeNote.className='quality good';
-      resumeNote.innerHTML='<strong>Inspection resumed</strong><p>You are back on the checklist item where you stopped. Take another photo or move to the next item when ready.</p>';
-      resumeNote.classList.remove('hidden');
-    }
+  if(!all.length){
+    box.innerHTML='<p class="muted">No saved inspections yet. An inspection is saved only after both Inspection ID and Address are entered.</p>';
     return;
   }
-  show('dashboardScreen');
-  if(target.itemKey){
-    requestAnimationFrame(()=>{
-      const el=document.querySelector(`[data-photo-key="${CSS.escape(target.itemKey)}"]`);
-      if(el){ el.classList.add('resume-highlight'); el.scrollIntoView({behavior:'smooth',block:'center'}); setTimeout(()=>el.classList.remove('resume-highlight'),1800); }
-    });
+  if(!visibleNewest.length && !visibleArchived.length){
+    box.innerHTML='<p class="muted">No saved inspection matches that ID or address.</p>';
+    return;
+  }
+
+  visibleNewest.forEach(item=>box.appendChild(createSavedInspectionCard(item,false)));
+
+  if(visibleArchived.length){
+    const details=document.createElement('details');
+    details.className='archive-section';
+    if(query || !visibleNewest.length) details.open=true;
+
+    const summary=document.createElement('summary');
+    summary.textContent=`Archived Inspections (${visibleArchived.length})`;
+    details.appendChild(summary);
+
+    const archiveList=document.createElement('div');
+    archiveList.className='archived-inspection-list';
+    visibleArchived.forEach(item=>archiveList.appendChild(createSavedInspectionCard(item,true)));
+    details.appendChild(archiveList);
+    box.appendChild(details);
   }
 }
 
@@ -677,7 +705,6 @@ function openPhoto(itemKey,autoLaunch=false,imageId=null){
     $('previewImg').classList.remove('hidden');
     runQuality(state.pendingDataUrl,{autoSave:false});
   }
-  setResumeTarget('cameraScreen',itemKey);
   show('cameraScreen');
   if(autoLaunch) launchCamera();
 }
@@ -926,7 +953,6 @@ function advanceFromCurrent(){
   if(next){
     openPhoto(next.key,true,null);
   }else{
-    setResumeTarget('dashboardScreen',currentKey);
     save();
     renderDashboard();
     show('dashboardScreen');
@@ -1181,19 +1207,24 @@ document.querySelectorAll('.tile').forEach(b=>b.onclick=()=>{
   $('inspector').value='Chris Roberts';
   show('setupScreen');
 });
-document.querySelectorAll('[data-screen]').forEach(b=>b.onclick=()=>{
-  const target=b.dataset.screen;
-  if(state.current && (target==='dashboardScreen'||target==='menuScreen')){
-    setResumeTarget('dashboardScreen',state.pendingPhoto?.itemKey||state.current.resumeTarget?.itemKey||null);
-  }
-  show(target);
-});
+document.querySelectorAll('[data-screen]').forEach(b=>b.onclick=()=>show(b.dataset.screen));
 $('startBtn').onclick=()=>{
   const c=state.current;
   c.inspectionId=$('inspectionId').value.trim();
   c.address=$('address').value.trim();
   c.inspector=$('inspector').value.trim()||'Chris Roberts';
-  c.resumeTarget={screen:'dashboardScreen',itemKey:null,updatedAt:new Date().toISOString()};
+
+  if(!c.inspectionId){
+    alert('Please enter the Inspection ID before starting.');
+    $('inspectionId').focus();
+    return;
+  }
+  if(!c.address){
+    alert('Please enter the property address before starting.');
+    $('address').focus();
+    return;
+  }
+
   save();
   renderDashboard();
   show('dashboardScreen');
@@ -1259,7 +1290,7 @@ $('installBtn').onclick=async()=>{
   }
 };
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('sw.js?v=2.1.0-build-016',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
+  navigator.serviceWorker.register('sw.js?v=2.1.0-build-017',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
 }
-$('resumeSearch')?.addEventListener('input',renderSaved);
+removeInvalidSavedInspections();
 renderSaved();

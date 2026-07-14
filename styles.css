@@ -77,21 +77,20 @@
 .departure-issue.na-issue{border-color:var(--accent2)}
 @media(max-width:430px){.smart-condition-controls{grid-template-columns:1fr}}
 
-
-/* Build 016: resume inspections by Inspection ID or address */
-.saved-inspections-heading{margin-top:22px}
-.saved-inspections-heading h3{margin:0 0 4px;font-size:21px}
-.resume-help{margin:0 0 10px;line-height:1.4}
+.resume-help{margin-top:-8px;margin-bottom:10px}
 .resume-search{margin:0 0 12px;background:#020617;border:1px solid var(--accent2)}
-.saved-list{display:grid;gap:12px}
-.saved-inspection-card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:14px}
-.saved-inspection-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
-.saved-inspection-top>div{display:grid;gap:4px;min-width:0}
-.saved-inspection-top strong{font-size:17px}
-.saved-inspection-top span:not(.saved-progress-badge){color:var(--muted);font-size:14px;overflow-wrap:anywhere}
-.saved-progress-badge{flex:0 0 auto;background:#1e293b;color:var(--text);padding:6px 9px;border-radius:999px;font-size:12px;font-weight:900}
-.saved-progress{height:9px;background:#020617;border:1px solid var(--line);border-radius:999px;overflow:hidden;margin:12px 0 7px}
-.saved-progress>div{height:100%;background:var(--accent)}
-.saved-inspection-meta{display:block;color:var(--muted);margin-bottom:11px}
+.saved-resume-card{display:grid;gap:12px}
+.saved-resume-info{display:grid;gap:4px}
+.saved-resume-info small{color:var(--muted);overflow-wrap:anywhere}
 .resume-inspection-btn{width:100%}
-.resume-highlight{outline:3px solid var(--accent2);outline-offset:3px;transition:outline-color .3s ease}
+
+
+/* Build 018: save only complete inspection identities + archive after six */
+.archive-section{margin-top:12px;border:1px solid var(--line);border-radius:16px;background:var(--panel);overflow:hidden}
+.archive-section summary{cursor:pointer;padding:14px;font-weight:850;color:var(--text);background:#172033;list-style:none}
+.archive-section summary::-webkit-details-marker{display:none}
+.archive-section summary::after{content:' ▾';color:var(--accent2)}
+.archive-section[open] summary::after{content:' ▴'}
+.archived-inspection-list{display:grid;gap:8px;padding:10px}
+.archived-saved-card{margin:0;background:#0f172a}
+.archive-badge{display:inline-block;width:max-content;margin-top:3px;padding:3px 7px;border-radius:999px;background:#334155;color:var(--muted);font-size:11px;font-weight:850}
