@@ -103,7 +103,7 @@
 .export-status.error{border-color:var(--bad);background:rgba(239,68,68,.10);color:#fee2e2}
 
 
-/* Build 020: optional automatic OneDrive upload to the NIIS folder */
+/* Build 021: native save picker for OneDrive / NIIS export */
 .onedrive-card{margin:18px 0;padding:14px;background:var(--panel);border:1px solid var(--accent2);border-radius:18px}
 .onedrive-card-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
 .onedrive-card-heading strong{font-size:18px}
