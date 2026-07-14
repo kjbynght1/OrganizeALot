@@ -1168,6 +1168,315 @@ function departureCheck(){
   show('reviewScreen');
 }
 
+function safeFilePart(value,fallback='item'){
+  const cleaned=String(value||'')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g,'')
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g,' ')
+    .replace(/[^a-zA-Z0-9._ -]+/g,' ')
+    .trim()
+    .replace(/\s+/g,'_')
+    .replace(/_+/g,'_')
+    .replace(/^[_\.]+|[_\.]+$/g,'');
+  return cleaned.slice(0,80)||fallback;
+}
+
+function exportItemBaseName(item){
+  const special={
+    front:'Front', rear:'Rear', left:'Left', right:'Right', address:'Address_Verification',
+    outbuildings:'Outbuildings', pools_spas:'Pools_Spas', hud_label:'HUD_Label',
+    levels:'Levels', kitchen:'Kitchen', bathrooms:'Bathrooms', living_room:'Living_Room',
+    electrical_panels:'Electrical_Panels', roof_front:'Roof_Front', roof_close:'Roof_Closeup',
+    hazards:'Hazards', roof_hazard:'Roof_Hazard'
+  };
+  return special[item.key]||safeFilePart(item.title,item.key||'Photo');
+}
+
+function dataUrlToBytes(dataUrl){
+  const comma=String(dataUrl||'').indexOf(',');
+  if(comma<0) throw new Error('Invalid photo data.');
+  const header=dataUrl.slice(0,comma);
+  const body=dataUrl.slice(comma+1);
+  if(/;base64/i.test(header)){
+    const binary=atob(body);
+    const bytes=new Uint8Array(binary.length);
+    for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
+    return bytes;
+  }
+  return new TextEncoder().encode(decodeURIComponent(body));
+}
+
+function dataUrlExtension(dataUrl){
+  const match=String(dataUrl||'').match(/^data:([^;,]+)/i);
+  const mime=(match?.[1]||'image/jpeg').toLowerCase();
+  if(mime.includes('png')) return 'png';
+  if(mime.includes('webp')) return 'webp';
+  if(mime.includes('gif')) return 'gif';
+  return 'jpg';
+}
+
+const CRC32_TABLE=(()=>{
+  const table=new Uint32Array(256);
+  for(let n=0;n<256;n++){
+    let c=n;
+    for(let k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);
+    table[n]=c>>>0;
+  }
+  return table;
+})();
+
+function crc32(bytes){
+  let c=0xFFFFFFFF;
+  for(let i=0;i<bytes.length;i++) c=CRC32_TABLE[(c^bytes[i])&0xFF]^(c>>>8);
+  return (c^0xFFFFFFFF)>>>0;
+}
+
+function setU16(view,offset,value){ view.setUint16(offset,value,true); }
+function setU32(view,offset,value){ view.setUint32(offset,value>>>0,true); }
+function zipDosDateTime(date=new Date()){
+  const year=Math.max(1980,date.getFullYear());
+  const time=((date.getHours()&31)<<11)|((date.getMinutes()&63)<<5)|((Math.floor(date.getSeconds()/2))&31);
+  const day=((year-1980)<<9)|((date.getMonth()+1)<<5)|date.getDate();
+  return {time,day};
+}
+function concatBytes(parts,totalLength=null){
+  const total=totalLength??parts.reduce((sum,p)=>sum+p.length,0);
+  const out=new Uint8Array(total);
+  let offset=0;
+  parts.forEach(part=>{ out.set(part,offset); offset+=part.length; });
+  return out;
+}
+
+function createStoreOnlyZip(files){
+  const encoder=new TextEncoder();
+  const localParts=[];
+  const centralParts=[];
+  let localOffset=0;
+  const stamp=zipDosDateTime(new Date());
+
+  files.forEach(file=>{
+    const nameBytes=encoder.encode(file.name);
+    const data=file.data instanceof Uint8Array?file.data:new Uint8Array(file.data);
+    const checksum=crc32(data);
+
+    const local=new Uint8Array(30);
+    const lv=new DataView(local.buffer);
+    setU32(lv,0,0x04034b50);
+    setU16(lv,4,20);
+    setU16(lv,6,0x0800);
+    setU16(lv,8,0);
+    setU16(lv,10,stamp.time);
+    setU16(lv,12,stamp.day);
+    setU32(lv,14,checksum);
+    setU32(lv,18,data.length);
+    setU32(lv,22,data.length);
+    setU16(lv,26,nameBytes.length);
+    setU16(lv,28,0);
+    localParts.push(local,nameBytes,data);
+
+    const central=new Uint8Array(46);
+    const cv=new DataView(central.buffer);
+    setU32(cv,0,0x02014b50);
+    setU16(cv,4,20);
+    setU16(cv,6,20);
+    setU16(cv,8,0x0800);
+    setU16(cv,10,0);
+    setU16(cv,12,stamp.time);
+    setU16(cv,14,stamp.day);
+    setU32(cv,16,checksum);
+    setU32(cv,20,data.length);
+    setU32(cv,24,data.length);
+    setU16(cv,28,nameBytes.length);
+    setU16(cv,30,0);
+    setU16(cv,32,0);
+    setU16(cv,34,0);
+    setU16(cv,36,0);
+    setU32(cv,38,0);
+    setU32(cv,42,localOffset);
+    centralParts.push(central,nameBytes);
+
+    localOffset+=local.length+nameBytes.length+data.length;
+  });
+
+  const centralSize=centralParts.reduce((sum,p)=>sum+p.length,0);
+  const end=new Uint8Array(22);
+  const ev=new DataView(end.buffer);
+  setU32(ev,0,0x06054b50);
+  setU16(ev,4,0);
+  setU16(ev,6,0);
+  setU16(ev,8,files.length);
+  setU16(ev,10,files.length);
+  setU32(ev,12,centralSize);
+  setU32(ev,16,localOffset);
+  setU16(ev,20,0);
+
+  return new Blob([...localParts,...centralParts,end],{type:'application/zip'});
+}
+
+function buildChecklistText(inspection,photoEntries){
+  const lines=[];
+  lines.push('ORGANIZEALOT INSPECTION PACKAGE');
+  lines.push(`Inspection ID: ${inspection.inspectionId}`);
+  lines.push(`Address: ${inspection.address}`);
+  lines.push(`Inspector: ${inspection.inspector||''}`);
+  lines.push(`Inspection Type: ${inspection.type}`);
+  lines.push(`Exported: ${new Date().toLocaleString()}`);
+  lines.push('');
+  lines.push('CHECKLIST');
+  lines.push('---------');
+  Object.values(inspection.photos||{}).forEach(item=>{
+    const status=itemStatus(item);
+    const count=savedImageCount(item);
+    const requirement=isNotApplicable(item)?'N/A':`${count} photo${count===1?'':'s'} / minimum ${requiredPhotoCount(item)}`;
+    lines.push(`[${status.toUpperCase()}] ${item.section} - ${item.title}: ${requirement}`);
+    if(item.note) lines.push(`  Note: ${item.note}`);
+  });
+  lines.push('');
+  lines.push('EXPORTED PHOTOS');
+  lines.push('---------------');
+  if(photoEntries.length){
+    photoEntries.forEach(entry=>lines.push(`${entry.filename} | ${entry.section} | ${entry.title}${entry.note?` | Note: ${entry.note}`:''}`));
+  }else lines.push('No photos were exported.');
+  return lines.join('\r\n');
+}
+
+function csvCell(value){
+  const text=String(value??'');
+  return `"${text.replace(/"/g,'""')}"`;
+}
+
+function buildPhotoManifestCsv(photoEntries){
+  const rows=[['Filename','Section','Checklist Item','Photo Number','Taken At','Quality Passed','Quality Details','Note']];
+  photoEntries.forEach(entry=>rows.push([
+    entry.filename,entry.section,entry.title,entry.photoNumber,entry.createdAt,
+    entry.qualityPass===true?'Yes':entry.qualityPass===false?'No':'Not checked',entry.qualityDetails,entry.note
+  ]));
+  return rows.map(row=>row.map(csvCell).join(',')).join('\r\n');
+}
+
+async function collectInspectionExportFiles(inspection,onProgress=()=>{}){
+  ensurePhotoChecklist(inspection);
+  const files=[];
+  const photoEntries=[];
+  const saved=flattenSavedImages(Object.values(inspection.photos||{}));
+  let completed=0;
+
+  for(const {item,image,index} of saved){
+    let dataUrl=image.dataUrl||null;
+    if(!dataUrl && image.hasPhoto) dataUrl=await getStoredPhoto(inspection.id,item.key,image);
+    completed++;
+    onProgress(completed,saved.length,item.title);
+    if(!dataUrl) continue;
+
+    const ext=dataUrlExtension(dataUrl);
+    const filename=`Photos/${exportItemBaseName(item)}_${String(index+1).padStart(2,'0')}.${ext}`;
+    files.push({name:filename,data:dataUrlToBytes(dataUrl)});
+    photoEntries.push({
+      filename,
+      section:item.section||'',
+      title:item.title||item.key,
+      itemKey:item.key,
+      photoNumber:index+1,
+      createdAt:image.createdAt||'',
+      qualityPass:image.quality?.pass,
+      qualityDetails:image.quality?.details||'',
+      note:image.note||''
+    });
+  }
+
+  const report={
+    version:'2.1.0 Build 019',
+    inspectionId:inspection.inspectionId,
+    address:inspection.address,
+    inspector:inspection.inspector,
+    type:inspection.type,
+    created:inspection.created,
+    updated:inspection.updated,
+    exported:new Date().toISOString(),
+    conditions:inspection.conditions||{},
+    departureOverride:inspection.departureOverride||null,
+    checklist:Object.values(inspection.photos||{}).map(item=>({
+      key:item.key,
+      section:item.section,
+      title:item.title,
+      status:itemStatus(item),
+      note:item.note||'',
+      condition:item.conditional?conditionValue(item):null,
+      minimumPhotos:requiredPhotoCount(item),
+      photoCount:savedImageCount(item)
+    })),
+    photos:photoEntries
+  };
+
+  files.unshift(
+    {name:'Inspection_Summary.json',data:new TextEncoder().encode(JSON.stringify(report,null,2))},
+    {name:'Checklist.txt',data:new TextEncoder().encode(buildChecklistText(inspection,photoEntries))},
+    {name:'Photo_Manifest.csv',data:new TextEncoder().encode(buildPhotoManifestCsv(photoEntries))}
+  );
+  return {files,photoEntries,report};
+}
+
+function triggerBlobDownload(blob,filename){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+
+async function finishAndExportInspection(){
+  if(!state.current || !hasRequiredInspectionIdentity(state.current)){
+    alert('Inspection ID and Address are required before exporting.');
+    return;
+  }
+
+  ensurePhotoChecklist(state.current);
+  save();
+  const groups=getDepartureGroups();
+  const unresolved=groups.open.length+(groups.basementUnknown?1:0)+groups.questionable.length;
+  if(unresolved && !state.current.departureOverride){
+    const proceed=confirm(`The Departure Check still has ${unresolved} unresolved item${unresolved===1?'':'s'}. Export the inspection package anyway?`);
+    if(!proceed){ departureCheck(); return; }
+  }
+
+  const btn=$('finishExportBtn');
+  const status=$('exportStatus');
+  btn.disabled=true;
+  btn.textContent='Preparing inspection package…';
+  status.className='export-status';
+  status.textContent='Collecting saved photos…';
+
+  try{
+    const {files,photoEntries}=await collectInspectionExportFiles(state.current,(done,total,title)=>{
+      status.textContent=total?`Collecting photos ${done}/${total}: ${title}`:'Preparing checklist and inspection summary…';
+    });
+    status.textContent=`Building ZIP package with ${photoEntries.length} photo${photoEntries.length===1?'':'s'}…`;
+    await new Promise(resolve=>setTimeout(resolve,20));
+    const zip=createStoreOnlyZip(files);
+    const packageName=`${safeFilePart(state.current.inspectionId,'Inspection')}_${safeFilePart(state.current.address,'Property')}.zip`;
+    triggerBlobDownload(zip,packageName);
+    state.current.lastExport={
+      exportedAt:new Date().toISOString(),
+      filename:packageName,
+      photoCount:photoEntries.length
+    };
+    save();
+    status.className='export-status success';
+    status.textContent=`✓ Export ready: ${photoEntries.length} photos plus checklist, manifest, and inspection summary.`;
+  }catch(err){
+    console.error('Inspection package export failed.',err);
+    status.className='export-status error';
+    status.textContent='Export failed. Your inspection is still saved. Please try again.';
+    alert('The inspection package could not be exported. Your saved inspection and photos were not deleted.');
+  }finally{
+    btn.disabled=false;
+    btn.textContent='✓ Finish & Export Inspection';
+  }
+}
+
 function exportReport(){
   save();
   const c=state.current;
@@ -1276,6 +1585,7 @@ $('markMissingBtn').onclick=async()=>{
 };
 $('saveBtn').onclick=save;
 $('departureBtn').onclick=departureCheck;
+$('finishExportBtn').onclick=finishAndExportInspection;
 $('exportBtn').onclick=exportReport;
 window.addEventListener('beforeinstallprompt',e=>{
   e.preventDefault();
@@ -1290,7 +1600,7 @@ $('installBtn').onclick=async()=>{
   }
 };
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('sw.js?v=2.1.0-build-017',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
+  navigator.serviceWorker.register('sw.js?v=2.1.0-build-019',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
 }
 removeInvalidSavedInspections();
 renderSaved();

@@ -4,15 +4,15 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0f172a" />
-  <title>OrganizeALot v2.1.0 Build 018</title>
-  <link rel="manifest" href="manifest.json?v=2.1.0-build-018" />
-  <link rel="stylesheet" href="styles.css?v=2.1.0-build-018" />
+  <title>OrganizeALot v2.1.0 Build 019</title>
+  <link rel="manifest" href="manifest.json?v=2.1.0-build-019" />
+  <link rel="stylesheet" href="styles.css?v=2.1.0-build-019" />
 </head>
 <body>
   <header class="app-header">
     <div>
       <h1>OrganizeALot</h1>
-      <p>Residential Inspection Assistant v2.1.0 · Build 018</p>
+      <p>Residential Inspection Assistant v2.1.0 · Build 019</p>
     </div>
     <button id="installBtn" class="small hidden">Install</button>
   </header>
@@ -89,7 +89,9 @@
       <div class="actions">
         <button id="takeNextBtn" class="primary">Take Next Photo</button>
         <button id="departureBtn" class="secondary">AI Departure Check</button>
-        <button id="exportBtn" class="secondary">Export Report</button>
+        <button id="finishExportBtn" class="primary finish-export-btn">✓ Finish & Export Inspection</button>
+        <p id="exportStatus" class="export-status hidden" role="status" aria-live="polite"></p>
+        <button id="exportBtn" class="secondary">Export Report Only</button>
       </div>
     </section>
 
@@ -128,6 +130,6 @@
     <button class="saved-item"></button>
   </template>
 
-  <script src="app.js?v=2.1.0-build-018"></script>
+  <script src="app.js?v=2.1.0-build-019"></script>
 </body>
 </html>
