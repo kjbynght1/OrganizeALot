@@ -49,8 +49,15 @@ const state = {
   pendingDataUrl:null,
   pendingQuality:null,
   deferredInstall:null,
-  qualityRunId:0
+  qualityRunId:0,
+  oneDrive:{ msalApp:null, account:null, initializedClientId:null }
 };
+
+const ONEDRIVE_CLIENT_ID_KEY='organizealot-onedrive-client-id';
+const ONEDRIVE_FOLDER_KEY='organizealot-onedrive-folder';
+const ONEDRIVE_ENABLED_KEY='organizealot-onedrive-enabled';
+const ONEDRIVE_SCOPES=['Files.ReadWrite','User.Read'];
+const ONEDRIVE_SIMPLE_UPLOAD_LIMIT=250*1024*1024;
 
 const PHOTO_DB='organizealot-photos-v1';
 const PHOTO_STORE='photos';
@@ -1233,6 +1240,244 @@ function crc32(bytes){
 
 function setU16(view,offset,value){ view.setUint16(offset,value,true); }
 function setU32(view,offset,value){ view.setUint32(offset,value>>>0,true); }
+
+function getOneDriveSettings(){
+  return {
+    clientId:(localStorage.getItem(ONEDRIVE_CLIENT_ID_KEY)||'').trim(),
+    folder:(localStorage.getItem(ONEDRIVE_FOLDER_KEY)||'NIIS').trim()||'NIIS',
+    enabled:localStorage.getItem(ONEDRIVE_ENABLED_KEY)==='true'
+  };
+}
+
+function setOneDriveEnabled(enabled){
+  localStorage.setItem(ONEDRIVE_ENABLED_KEY,enabled?'true':'false');
+}
+
+function oneDriveRedirectUri(){
+  return `${window.location.origin}${window.location.pathname}`;
+}
+
+function safeOneDriveFolder(folder){
+  return String(folder||'NIIS').split('/').map(part=>part.trim()).filter(Boolean).join('/')||'NIIS';
+}
+
+function encodeOneDrivePath(path){
+  return safeOneDriveFolder(path).split('/').map(encodeURIComponent).join('/');
+}
+
+function oneDriveAccountLabel(account){
+  return account?.username||account?.name||'Microsoft account';
+}
+
+function updateOneDriveUi(message=''){
+  const settings=getOneDriveSettings();
+  const connected=!!(settings.enabled && state.oneDrive.account);
+  const folder=safeOneDriveFolder(settings.folder);
+  const menuStatus=$('oneDriveStatusMenu');
+  const dashStatus=$('oneDriveStatusDash');
+  const badge=$('oneDriveBadgeMenu');
+  const connectMenu=$('connectOneDriveMenuBtn');
+  const connectDash=$('connectOneDriveDashBtn');
+  const disconnect=$('disconnectOneDriveBtn');
+  const folderDash=$('oneDriveFolderDash');
+  if(folderDash) folderDash.textContent=folder;
+  if($('oneDriveFolder')) $('oneDriveFolder').value=folder;
+  if($('oneDriveClientId') && !$('oneDriveClientId').value) $('oneDriveClientId').value=settings.clientId;
+
+  let text=message;
+  if(!text){
+    if(connected) text=`Connected as ${oneDriveAccountLabel(state.oneDrive.account)}. Finished inspection ZIPs will auto-upload to ${folder}.`;
+    else if(settings.clientId) text=`Ready to connect. Local export remains available until OneDrive is connected.`;
+    else text='Not configured yet. Finished inspections still save locally.';
+  }
+  if(menuStatus) menuStatus.textContent=text;
+  if(dashStatus) dashStatus.textContent=text;
+  if(badge){ badge.textContent=connected?'ON':'OFF'; badge.className=`onedrive-badge ${connected?'on':'off'}`; }
+  if(connectMenu) connectMenu.textContent=connected?'Reconnect OneDrive':'Connect OneDrive';
+  if(connectDash) connectDash.textContent=connected?'Connected ✓':'Connect';
+  if(disconnect) disconnect.classList.toggle('hidden',!connected);
+}
+
+async function initOneDriveClient(){
+  const settings=getOneDriveSettings();
+  if(!settings.clientId) throw new Error('Microsoft App Client ID is required for OneDrive connection.');
+  if(!window.msal?.PublicClientApplication) throw new Error('Microsoft sign-in library did not load. Check your internet connection and reopen the app.');
+
+  if(state.oneDrive.msalApp && state.oneDrive.initializedClientId===settings.clientId){
+    return state.oneDrive.msalApp;
+  }
+
+  state.oneDrive.msalApp=new window.msal.PublicClientApplication({
+    auth:{
+      clientId:settings.clientId,
+      authority:'https://login.microsoftonline.com/common',
+      redirectUri:oneDriveRedirectUri()
+    },
+    cache:{ cacheLocation:'localStorage' }
+  });
+  state.oneDrive.initializedClientId=settings.clientId;
+  await state.oneDrive.msalApp.initialize();
+  try{
+    const redirectResult=await state.oneDrive.msalApp.handleRedirectPromise();
+    if(redirectResult?.account) state.oneDrive.account=redirectResult.account;
+  }catch(err){ console.warn('OneDrive redirect sign-in result could not be processed.',err); }
+  if(!state.oneDrive.account){
+    const accounts=state.oneDrive.msalApp.getAllAccounts();
+    if(accounts.length) state.oneDrive.account=accounts[0];
+  }
+  return state.oneDrive.msalApp;
+}
+
+async function connectOneDrive(){
+  const settings=getOneDriveSettings();
+  if(!settings.clientId){
+    $('oneDriveSetupDetails')?.setAttribute('open','');
+    $('oneDriveClientId')?.focus();
+    updateOneDriveUi('Enter the Microsoft App Client ID below, save it, then tap Connect OneDrive.');
+    alert('One-time setup needed: enter the Microsoft App Client ID, save the setting, then tap Connect OneDrive again.');
+    return false;
+  }
+
+  updateOneDriveUi('Opening Microsoft sign-in…');
+  try{
+    const app=await initOneDriveClient();
+    const result=await app.loginPopup({scopes:ONEDRIVE_SCOPES,prompt:'select_account'});
+    state.oneDrive.account=result.account||state.oneDrive.account;
+    setOneDriveEnabled(true);
+    const token=await getOneDriveAccessToken(true);
+    await ensureOneDriveFolder(token,safeOneDriveFolder(settings.folder));
+    updateOneDriveUi();
+    return true;
+  }catch(err){
+    console.error('OneDrive connection failed.',err);
+    setOneDriveEnabled(false);
+    updateOneDriveUi('OneDrive connection was not completed. Local export still works.');
+    alert(`OneDrive connection was not completed. ${err?.message||'Please try again.'}`);
+    return false;
+  }
+}
+
+function disconnectOneDrive(){
+  setOneDriveEnabled(false);
+  state.oneDrive.account=null;
+  updateOneDriveUi('OneDrive auto-upload is off. Local export still works.');
+}
+
+async function getOneDriveAccessToken(interactive=false){
+  const app=await initOneDriveClient();
+  if(!state.oneDrive.account){
+    const accounts=app.getAllAccounts();
+    if(accounts.length) state.oneDrive.account=accounts[0];
+  }
+  if(!state.oneDrive.account){
+    if(!interactive) throw new Error('OneDrive is not connected.');
+    const login=await app.loginPopup({scopes:ONEDRIVE_SCOPES,prompt:'select_account'});
+    state.oneDrive.account=login.account;
+    setOneDriveEnabled(true);
+  }
+
+  try{
+    const result=await app.acquireTokenSilent({scopes:ONEDRIVE_SCOPES,account:state.oneDrive.account});
+    return result.accessToken;
+  }catch(err){
+    if(!interactive) throw err;
+    const result=await app.acquireTokenPopup({scopes:ONEDRIVE_SCOPES,account:state.oneDrive.account});
+    if(result.account) state.oneDrive.account=result.account;
+    return result.accessToken;
+  }
+}
+
+async function graphFetch(url,options={},token){
+  const response=await fetch(url,{
+    ...options,
+    headers:{
+      ...(options.headers||{}),
+      Authorization:`Bearer ${token}`
+    }
+  });
+  if(!response.ok){
+    let detail='';
+    try{ detail=(await response.json())?.error?.message||''; }catch(_){ }
+    const error=new Error(detail||`Microsoft Graph request failed (${response.status}).`);
+    error.status=response.status;
+    throw error;
+  }
+  return response;
+}
+
+async function ensureOneDriveFolder(token,folderPath){
+  const parts=safeOneDriveFolder(folderPath).split('/').filter(Boolean);
+  let current='';
+  for(const part of parts){
+    const parent=current;
+    current=current?`${current}/${part}`:part;
+    const checkUrl=`https://graph.microsoft.com/v1.0/me/drive/root:/${encodeOneDrivePath(current)}`;
+    try{
+      await graphFetch(checkUrl,{method:'GET'},token);
+      continue;
+    }catch(err){
+      if(err.status!==404) throw err;
+    }
+    const createUrl=parent
+      ? `https://graph.microsoft.com/v1.0/me/drive/root:/${encodeOneDrivePath(parent)}:/children`
+      : 'https://graph.microsoft.com/v1.0/me/drive/root/children';
+    await graphFetch(createUrl,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name:part,folder:{},'@microsoft.graph.conflictBehavior':'fail'})
+    },token);
+  }
+}
+
+async function uploadInspectionZipToOneDrive(blob,filename,onStatus=()=>{}){
+  if(blob.size>ONEDRIVE_SIMPLE_UPLOAD_LIMIT) throw new Error('Inspection ZIP is larger than 250 MB. Use the local backup for this inspection.');
+  const settings=getOneDriveSettings();
+  if(!settings.enabled) throw new Error('OneDrive auto-upload is not enabled.');
+  const folder=safeOneDriveFolder(settings.folder);
+  onStatus('Getting secure OneDrive access…');
+  const token=await getOneDriveAccessToken(true);
+  onStatus(`Checking OneDrive → ${folder}…`);
+  await ensureOneDriveFolder(token,folder);
+  onStatus(`Uploading ${filename} to OneDrive → ${folder}…`);
+  const url=`https://graph.microsoft.com/v1.0/me/drive/root:/${encodeOneDrivePath(folder)}/${encodeURIComponent(filename)}:/content`;
+  const response=await graphFetch(url,{
+    method:'PUT',
+    headers:{'Content-Type':'application/zip'},
+    body:blob
+  },token);
+  return response.json();
+}
+
+function saveOneDriveSettings(){
+  const clientId=($('oneDriveClientId')?.value||'').trim();
+  const folder=safeOneDriveFolder($('oneDriveFolder')?.value||'NIIS');
+  if(!clientId){
+    alert('Enter the Microsoft App Client ID first.');
+    $('oneDriveClientId')?.focus();
+    return;
+  }
+  localStorage.setItem(ONEDRIVE_CLIENT_ID_KEY,clientId);
+  localStorage.setItem(ONEDRIVE_FOLDER_KEY,folder);
+  setOneDriveEnabled(false);
+  state.oneDrive={msalApp:null,account:null,initializedClientId:null};
+  updateOneDriveUi(`Settings saved. Tap Connect OneDrive to sign in and enable automatic upload to ${folder}.`);
+}
+
+async function restoreOneDriveConnection(){
+  const settings=getOneDriveSettings();
+  if($('oneDriveClientId')) $('oneDriveClientId').value=settings.clientId;
+  if($('oneDriveFolder')) $('oneDriveFolder').value=safeOneDriveFolder(settings.folder);
+  if(!settings.clientId || !settings.enabled){ updateOneDriveUi(); return; }
+  try{
+    await initOneDriveClient();
+    if(state.oneDrive.account) updateOneDriveUi();
+    else{ setOneDriveEnabled(false); updateOneDriveUi(); }
+  }catch(err){
+    console.warn('OneDrive silent restore failed.',err);
+    updateOneDriveUi('OneDrive needs to reconnect. Local export still works.');
+  }
+}
+
 function zipDosDateTime(date=new Date()){
   const year=Math.max(1980,date.getFullYear());
   const time=((date.getHours()&31)<<11)|((date.getMinutes()&63)<<5)|((Math.floor(date.getSeconds()/2))&31);
@@ -1385,7 +1630,7 @@ async function collectInspectionExportFiles(inspection,onProgress=()=>{}){
   }
 
   const report={
-    version:'2.1.0 Build 019',
+    version:'2.1.0 Build 020',
     inspectionId:inspection.inspectionId,
     address:inspection.address,
     inspector:inspection.inspector,
@@ -1463,9 +1708,31 @@ async function finishAndExportInspection(){
       filename:packageName,
       photoCount:photoEntries.length
     };
+
+    const oneDriveSettings=getOneDriveSettings();
+    let oneDriveUpload=null;
+    if(oneDriveSettings.enabled && oneDriveSettings.clientId){
+      try{
+        oneDriveUpload=await uploadInspectionZipToOneDrive(zip,packageName,message=>{ status.textContent=message; });
+        state.current.lastOneDriveUpload={
+          uploadedAt:new Date().toISOString(),
+          filename:packageName,
+          folder:safeOneDriveFolder(oneDriveSettings.folder),
+          itemId:oneDriveUpload?.id||null,
+          webUrl:oneDriveUpload?.webUrl||null
+        };
+        status.className='export-status success';
+        status.textContent=`✓ Local backup saved and uploaded to OneDrive → ${safeOneDriveFolder(oneDriveSettings.folder)}.`;
+      }catch(uploadErr){
+        console.error('OneDrive upload failed after local export.',uploadErr);
+        status.className='export-status warning';
+        status.textContent=`Local backup saved, but OneDrive upload failed: ${uploadErr?.message||'Please reconnect OneDrive and try again.'}`;
+      }
+    }else{
+      status.className='export-status success';
+      status.textContent=`✓ Local export ready: ${photoEntries.length} photos plus checklist, manifest, and inspection summary. Connect OneDrive to auto-upload future inspection ZIPs.`;
+    }
     save();
-    status.className='export-status success';
-    status.textContent=`✓ Export ready: ${photoEntries.length} photos plus checklist, manifest, and inspection summary.`;
   }catch(err){
     console.error('Inspection package export failed.',err);
     status.className='export-status error';
@@ -1587,6 +1854,10 @@ $('saveBtn').onclick=save;
 $('departureBtn').onclick=departureCheck;
 $('finishExportBtn').onclick=finishAndExportInspection;
 $('exportBtn').onclick=exportReport;
+$('connectOneDriveMenuBtn').onclick=connectOneDrive;
+$('connectOneDriveDashBtn').onclick=connectOneDrive;
+$('disconnectOneDriveBtn').onclick=disconnectOneDrive;
+$('saveOneDriveSettingsBtn').onclick=saveOneDriveSettings;
 window.addEventListener('beforeinstallprompt',e=>{
   e.preventDefault();
   state.deferredInstall=e;
@@ -1600,7 +1871,8 @@ $('installBtn').onclick=async()=>{
   }
 };
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('sw.js?v=2.1.0-build-019',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
+  navigator.serviceWorker.register('sw.js?v=2.1.0-build-020',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
 }
 removeInvalidSavedInspections();
 renderSaved();
+restoreOneDriveConnection();

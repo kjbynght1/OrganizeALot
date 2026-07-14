@@ -4,15 +4,15 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0f172a" />
-  <title>OrganizeALot v2.1.0 Build 019</title>
-  <link rel="manifest" href="manifest.json?v=2.1.0-build-019" />
-  <link rel="stylesheet" href="styles.css?v=2.1.0-build-019" />
+  <title>OrganizeALot v2.1.0 Build 020</title>
+  <link rel="manifest" href="manifest.json?v=2.1.0-build-020" />
+  <link rel="stylesheet" href="styles.css?v=2.1.0-build-020" />
 </head>
 <body>
   <header class="app-header">
     <div>
       <h1>OrganizeALot</h1>
-      <p>Residential Inspection Assistant v2.1.0 · Build 019</p>
+      <p>Residential Inspection Assistant v2.1.0 · Build 020</p>
     </div>
     <button id="installBtn" class="small hidden">Install</button>
   </header>
@@ -26,6 +26,32 @@
         <button class="tile" data-type="Commercial">🏬<span>Commercial</span><small>Coming soon</small></button>
         <button class="tile obs" data-type="OBS">🚗<span>OBS</span><small>Observation exterior only</small></button>
       </div>
+
+      <section class="onedrive-card" aria-live="polite">
+        <div class="onedrive-card-heading">
+          <div>
+            <strong>☁ OneDrive Export</strong>
+            <p id="oneDriveStatusMenu" class="muted">Not connected. Finished inspections still save locally.</p>
+          </div>
+          <span id="oneDriveBadgeMenu" class="onedrive-badge off">OFF</span>
+        </div>
+        <div class="onedrive-actions">
+          <button id="connectOneDriveMenuBtn" class="primary">Connect OneDrive</button>
+          <button id="disconnectOneDriveBtn" class="secondary hidden">Disconnect</button>
+        </div>
+        <details id="oneDriveSetupDetails" class="onedrive-setup">
+          <summary>One-time OneDrive setup</summary>
+          <label>Microsoft App Client ID
+            <input id="oneDriveClientId" placeholder="Paste Microsoft app Client ID" autocomplete="off" spellcheck="false" />
+          </label>
+          <label>OneDrive folder
+            <input id="oneDriveFolder" value="NIIS" placeholder="NIIS" autocomplete="off" />
+          </label>
+          <p class="muted onedrive-setup-help">The folder defaults to <strong>NIIS</strong>. OrganizeALot stores the Client ID on this device only and never stores your Microsoft password.</p>
+          <button id="saveOneDriveSettingsBtn" class="secondary">Save OneDrive Settings</button>
+        </details>
+      </section>
+
       <h3>Resume Saved Inspection</h3>
       <p class="muted resume-help">Search by Inspection ID or property address.</p>
       <input id="resumeSearch" class="resume-search" type="search" placeholder="Search Inspection ID or address" autocomplete="off" />
@@ -61,6 +87,14 @@
       </div>
       <h2 id="dashTitle">Inspection</h2>
       <p id="dashMeta" class="muted"></p>
+
+      <div class="onedrive-mini-card">
+        <div>
+          <strong>☁ OneDrive → <span id="oneDriveFolderDash">NIIS</span></strong>
+          <p id="oneDriveStatusDash" class="muted">Not connected. Local export remains available.</p>
+        </div>
+        <button id="connectOneDriveDashBtn" class="secondary">Connect</button>
+      </div>
 
       <div class="progress-wrap">
         <div class="progress-label"><span id="progressText">0/0 complete</span><span id="readyText">Not ready</span></div>
@@ -130,6 +164,7 @@
     <button class="saved-item"></button>
   </template>
 
-  <script src="app.js?v=2.1.0-build-019"></script>
+  <script src="msal-browser.min.js?v=5.17.0"></script>
+  <script src="app.js?v=2.1.0-build-020"></script>
 </body>
 </html>
