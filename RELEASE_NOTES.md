@@ -1,38 +1,13 @@
-# OrganizeALot v2.1.0 Build 023
+# OrganizeALot v2.1.0 Build 022 — Waze + Reopen Photo Fix
 
-## New in Build 023
+This remains **Build 022**.
 
-- Added a **Navigate with Waze** button beside the existing map preview controls.
-- Uses the inspection address already entered in OrganizeALot and starts Waze navigation to that destination.
-- If Waze is installed on the phone, the Waze app opens; otherwise the Waze web experience is used.
-- Added a clear address-required message if navigation is tapped before an address is entered.
-
-## Preserved from Build 022
-
-- Added a separate **Preferred Reports Commercial** inspection workflow.
-- Added large section buttons with **red → yellow → green** completion states.
-- Added company-specific areas for:
-  - Job / contact information
-  - Business operations, annual sales and payroll
-  - Building / square footage details
-  - Front, exterior, interior and hazard photo groups
-  - Electrical panel documentation
-  - Fire protection and commercial cooking
-  - Additional buildings and adjacent exposures
-  - Hazards and recommendations
-  - BVS / RCT data entry
-  - Diagrams and attachment checklist
-  - Final field review
-- Photos can be taken in any order.
-- Each photo item supports unlimited photos.
-- After capture, a full-screen **Use Photo / Retake** review is shown.
-- Preserved working save rules: inspections are not stored until both Inspection ID and Address are entered.
-- Keeps the 6 most recent inspections in the Resume list and moves older ones to searchable Archives.
-- Finish & Export creates a ZIP containing a JSON report, printable HTML report and organized photo folders.
-- Export uses the device save picker when available, then the phone share/save sheet, with regular ZIP download as fallback. This allows selecting OneDrive / NIIS when exposed by the device.
-- No Azure portal, Microsoft Entra, Client ID, Microsoft sign-in or MSAL setup is used.
-
-## Build 023 refresh fix
-- Corrected the visible app title and internal version label from Build 022 to Build 023.
-- Added stronger service-worker update handling so a phone is less likely to stay stuck on an older cached build.
-- Waze navigation remains included.
+Changes in this revision:
+- Added a Waze button inside every inspection. It uses that inspection's saved address.
+- Added Waze on the new-inspection setup screen.
+- Fixed reopened inspections so each photo stays under the correct checklist item.
+- Fixed Delete Photo placement so it remains directly under each photo after reopening.
+- Photos are persisted in IndexedDB by inspection and checklist item.
+- Preserves multiple inspections, 6 newest in Resume, older inspections in Archived Inspections.
+- Saves inspections only after both Inspection ID and Address are entered.
+- Preferred Reports workflow includes 13 field sections, required-photo status tracking, unlimited photos, preview with Use Photo / Retake, final missing-photo check, and ZIP export.

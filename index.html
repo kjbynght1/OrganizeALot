@@ -3,136 +3,103 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0f172a" />
-  <title>OrganizeALot v2.1.0 Build 023</title>
+  <meta name="theme-color" content="#0b1120" />
+  <title>OrganizeALot v2.1.0 Build 022</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header class="app-header">
-    <div>
-      <h1>OrganizeALot</h1>
-      <p>Inspection Assistant v2.1.0 Build 023</p>
+<header class="app-header">
+  <div>
+    <h1>OrganizeALot</h1>
+    <p>v2.1.0 Build 022</p>
+  </div>
+  <button id="installBtn" class="small hidden">Install</button>
+</header>
+
+<main>
+  <section id="menuScreen" class="screen active">
+    <h2>Start Inspection</h2>
+    <div class="grid type-grid">
+      <button class="tile" data-type="Residential">🏠<span>Residential</span><small>Full residential workflow</small></button>
+      <button class="tile" data-type="OBS">🚗<span>OBS</span><small>Exterior only</small></button>
+      <button class="tile" data-type="USAA">🛡️<span>USAA</span><small>Interior & exterior</small></button>
+      <button class="tile preferred" data-type="Preferred Reports">📋<span>Preferred Reports</span><small>Commercial field workflow</small></button>
     </div>
-    <button id="installBtn" class="small hidden">Install</button>
-  </header>
 
-  <main>
-    <section id="menuScreen" class="screen active">
-      <h2>Choose Inspection Type / Client</h2>
-      <div class="grid menu-grid">
-        <button class="tile" data-type="Residential">🏠<span>Residential</span><small>General residential workflow</small></button>
-        <button class="tile obs" data-type="OBS">🚗<span>OBS</span><small>Exterior observation only</small></button>
-        <button class="tile preferred" data-type="PreferredCommercial">🏢<span>Preferred Reports</span><small>Commercial interior / exterior workflow</small></button>
-      </div>
+    <h3>Resume Inspections</h3>
+    <div id="savedList" class="saved-list"></div>
 
-      <div class="saved-header">
-        <h3>Resume Inspections</h3>
-        <input id="resumeSearch" class="search" type="search" placeholder="Search ID, address, insured, or type" />
-      </div>
-      <div id="savedList" class="saved-list"></div>
-      <details id="archiveDetails" class="archive-box hidden">
-        <summary>Archived Inspections (<span id="archiveCount">0</span>)</summary>
-        <div id="archivedList" class="saved-list"></div>
-      </details>
-    </section>
+    <details id="archiveDetails" class="archive-box hidden">
+      <summary>Archived Inspections</summary>
+      <div id="archivedList" class="saved-list"></div>
+    </details>
+  </section>
 
-    <section id="setupScreen" class="screen">
-      <button class="back" data-screen="menuScreen">← Back</button>
-      <h2 id="setupTitle">New Inspection</h2>
-      <div id="setupClientNotice" class="notice hidden"></div>
-      <label>Inspection ID <span class="required">Required</span>
-        <input id="inspectionId" placeholder="Example: 2342467" autocomplete="off" />
+  <section id="setupScreen" class="screen">
+    <button class="back" data-screen="menuScreen">← Back</button>
+    <h2 id="setupTitle">New Inspection</h2>
+    <div class="card">
+      <label>Inspection ID
+        <input id="inspectionId" placeholder="Required to save" autocomplete="off" />
       </label>
-      <label>Address <span class="required">Required</span>
-        <input id="address" placeholder="Property address" autocomplete="street-address" />
-      </label>
-      <label>Insured / Business Name
-        <input id="insured" placeholder="Insured or business name" autocomplete="organization" />
+      <label>Address
+        <input id="address" placeholder="Required to save and use Waze" autocomplete="street-address" />
       </label>
       <label>Inspector
         <input id="inspector" placeholder="Chris Roberts" autocomplete="name" />
       </label>
-      <div class="street-card">
-        <div>
-          <strong>Street View / Map Preview</strong>
-          <p>Open the property address in Google Maps before arrival.</p>
-        </div>
-        <div class="map-actions">
-          <button id="openMapBtn" class="secondary">Open Map</button>
-          <button id="openWazeBtn" class="waze-btn">Navigate with Waze</button>
-        </div>
+      <div class="two-buttons">
+        <button id="wazeSetupBtn" class="waze">Open Waze</button>
+        <button id="startBtn" class="primary">Start Inspection</button>
       </div>
-      <div id="setupError" class="error hidden"></div>
-      <button id="startBtn" class="primary full">Start Inspection</button>
-    </section>
+      <p class="muted">The inspection is saved only after both Inspection ID and Address are entered.</p>
+    </div>
+  </section>
 
-    <section id="dashboardScreen" class="screen">
-      <div class="dash-top">
-        <button class="back" data-screen="menuScreen">← Menu</button>
-        <button id="saveBtn" class="secondary">Save</button>
-      </div>
-      <h2 id="dashTitle">Inspection</h2>
-      <p id="dashMeta" class="muted"></p>
+  <section id="inspectionScreen" class="screen">
+    <div class="sticky-tools">
+      <button class="back" data-screen="menuScreen">← Inspections</button>
+      <button id="saveBtn" class="secondary">Save</button>
+    </div>
 
+    <div class="card inspection-header-card">
+      <h2 id="inspectionTitle">Inspection</h2>
+      <div id="inspectionMeta" class="muted"></div>
       <div class="progress-wrap">
-        <div class="progress-label"><span id="progressText">0/0 sections complete</span><span id="readyText">In progress</span></div>
+        <div class="progress-label"><span id="progressText">0/0 complete</span><span id="readyText">In progress</span></div>
         <div class="progress"><div id="progressBar"></div></div>
       </div>
-
-      <div id="preferredNotice" class="notice hidden">
-        <strong>Preferred Reports commercial workflow.</strong><br>
-        Work in any order. Section buttons change from red → yellow → green as you complete them. Photo export order is Front → Exterior → Interior → Hazards / Recommendations → Supporting Attachments.
+      <div class="two-buttons">
+        <button id="wazeBtn" class="waze">🚗 Waze to This Inspection</button>
+        <button id="exportBtn" class="primary">Finish & Export ZIP</button>
       </div>
+    </div>
 
-      <div id="sectionList" class="section-list"></div>
+    <div id="coreFields" class="card"></div>
+    <div id="sections"></div>
+  </section>
 
-      <div class="actions sticky-actions">
-        <button id="departureBtn" class="secondary">Final Departure Check</button>
-        <button id="finishExportBtn" class="primary">Finish & Export ZIP</button>
-      </div>
-    </section>
+  <section id="departureScreen" class="screen">
+    <button class="back" data-screen="inspectionScreen">← Inspection</button>
+    <h2>Final Departure Check</h2>
+    <div id="departureResults"></div>
+  </section>
+</main>
 
-    <section id="sectionScreen" class="screen">
-      <div class="dash-top">
-        <button class="back" data-screen="dashboardScreen">← Sections</button>
-        <button id="sectionCompleteBtn" class="secondary">Mark Complete</button>
-      </div>
-      <h2 id="sectionTitle">Section</h2>
-      <p id="sectionHelp" class="muted"></p>
-      <div id="sectionForm"></div>
-    </section>
+<div id="photoModal" class="modal hidden" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <h2 id="photoModalTitle">Review Photo</h2>
+    <img id="photoPreview" alt="Photo preview" />
+    <div class="modal-actions">
+      <button id="usePhotoBtn" class="primary">Use Photo</button>
+      <button id="retakePhotoBtn" class="secondary">Retake</button>
+      <button id="cancelPhotoBtn" class="ghost">Cancel</button>
+    </div>
+  </div>
+</div>
 
-    <section id="photoPreviewScreen" class="screen">
-      <button class="back" id="cancelPreviewBtn">← Cancel</button>
-      <h2 id="photoPreviewTitle">Review Photo</h2>
-      <p class="muted">Review the full image before saving it to this item.</p>
-      <div class="photo-preview-wrap">
-        <img id="previewImg" alt="Captured photo preview" />
-      </div>
-      <label>Photo note
-        <textarea id="photoNote" rows="3" placeholder="Optional note"></textarea>
-      </label>
-      <div id="qualityBox" class="quality hidden"></div>
-      <div class="actions">
-        <button id="usePhotoBtn" class="primary">Use Photo</button>
-        <button id="retakeBtn" class="secondary">Retake</button>
-      </div>
-    </section>
-
-    <section id="reviewScreen" class="screen">
-      <button class="back" data-screen="dashboardScreen">← Dashboard</button>
-      <h2>Final Departure Check</h2>
-      <div id="reviewResults" class="review"></div>
-      <button class="primary full" data-screen="dashboardScreen">Done</button>
-    </section>
-  </main>
-
-  <input id="cameraInput" class="hidden-picker" type="file" accept="image/*" capture="environment" />
-
-  <div id="toast" class="toast hidden" role="status"></div>
-
-  <script src="jszip.min.js"></script>
-  <script src="app.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
