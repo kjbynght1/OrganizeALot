@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = 'v2.1.0 Build 022';
+const APP_VERSION = 'v2.1.0 Build 023';
 const STORAGE_PREFIX = 'insp_';
 const DB_NAME = 'OrganizeALotDB';
 const DB_VERSION = 1;
@@ -821,6 +821,21 @@ $('resumeSearch').addEventListener('input',renderSaved);
 
 window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); state.deferredInstall=e; $('installBtn').classList.remove('hidden'); });
 $('installBtn').addEventListener('click',async()=>{ if(state.deferredInstall){ state.deferredInstall.prompt(); state.deferredInstall=null; $('installBtn').classList.add('hidden'); } });
-if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(err=>console.warn('Service worker registration failed',err));
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', async () => {
+    try {
+      const registration = await navigator.serviceWorker.register('sw.js?v=023');
+      await registration.update();
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
+      });
+    } catch (err) {
+      console.warn('Service worker registration failed', err);
+    }
+  });
+}
 
 renderSaved();

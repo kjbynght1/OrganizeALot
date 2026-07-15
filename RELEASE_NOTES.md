@@ -31,3 +31,8 @@
 - Finish & Export creates a ZIP containing a JSON report, printable HTML report and organized photo folders.
 - Export uses the device save picker when available, then the phone share/save sheet, with regular ZIP download as fallback. This allows selecting OneDrive / NIIS when exposed by the device.
 - No Azure portal, Microsoft Entra, Client ID, Microsoft sign-in or MSAL setup is used.
+
+## Build 023 refresh fix
+- Corrected the visible app title and internal version label from Build 022 to Build 023.
+- Added stronger service-worker update handling so a phone is less likely to stay stuck on an older cached build.
+- Waze navigation remains included.
