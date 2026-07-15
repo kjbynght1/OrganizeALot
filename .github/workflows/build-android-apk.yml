@@ -3,11 +3,14 @@ name: Build OrganizeALot Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [ main, master ]
+    branches:
+      - main
+      - master
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -15,11 +18,11 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20'
           cache: npm
 
       - name: Install web dependencies
-      run: npm install --no-audit --no-fund
+        run: npm install --no-audit --no-fund
 
       - name: Sync Capacitor Android project
         run: npx cap sync android
@@ -33,7 +36,9 @@ jobs:
 
       - name: Build debug APK
         working-directory: android
-        run: ./gradlew assembleDebug
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
