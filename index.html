@@ -4,53 +4,51 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0f172a" />
-  <title>OrganizeALot v2.1.0 Build 021</title>
-  <link rel="manifest" href="manifest.json?v=2.1.0-build-021" />
-  <link rel="stylesheet" href="styles.css?v=2.1.0-build-021" />
+  <title>OrganizeALot v2.1.0 Build 022</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header class="app-header">
     <div>
       <h1>OrganizeALot</h1>
-      <p>Residential Inspection Assistant v2.1.0 · Build 021</p>
+      <p>Inspection Assistant v2.1.0 Build 022</p>
     </div>
     <button id="installBtn" class="small hidden">Install</button>
   </header>
 
   <main>
     <section id="menuScreen" class="screen active">
-      <h2>Start Inspection</h2>
-      <div class="grid">
-        <button class="tile" data-type="Residential">🏠<span>Residential</span><small>Full workflow</small></button>
-        <button class="tile" data-type="Apartment">🏢<span>Apartment</span><small>Coming soon</small></button>
-        <button class="tile" data-type="Commercial">🏬<span>Commercial</span><small>Coming soon</small></button>
-        <button class="tile obs" data-type="OBS">🚗<span>OBS</span><small>Observation exterior only</small></button>
+      <h2>Choose Inspection Type / Client</h2>
+      <div class="grid menu-grid">
+        <button class="tile" data-type="Residential">🏠<span>Residential</span><small>General residential workflow</small></button>
+        <button class="tile obs" data-type="OBS">🚗<span>OBS</span><small>Exterior observation only</small></button>
+        <button class="tile preferred" data-type="PreferredCommercial">🏢<span>Preferred Reports</span><small>Commercial interior / exterior workflow</small></button>
       </div>
 
-      <section class="onedrive-card" aria-live="polite">
-        <div class="onedrive-card-heading">
-          <div>
-            <strong>☁ Export to OneDrive → NIIS</strong>
-            <p class="muted">No Microsoft sign-in, Azure setup, or Client ID. When you finish an inspection, choose <strong>OneDrive → NIIS</strong> in the phone's Save window.</p>
-          </div>
-          <span class="onedrive-badge on">READY</span>
-        </div>
-      </section>
-
-      <h3>Resume Saved Inspection</h3>
-      <p class="muted resume-help">Search by Inspection ID or property address.</p>
-      <input id="resumeSearch" class="resume-search" type="search" placeholder="Search Inspection ID or address" autocomplete="off" />
+      <div class="saved-header">
+        <h3>Resume Inspections</h3>
+        <input id="resumeSearch" class="search" type="search" placeholder="Search ID, address, insured, or type" />
+      </div>
       <div id="savedList" class="saved-list"></div>
+      <details id="archiveDetails" class="archive-box hidden">
+        <summary>Archived Inspections (<span id="archiveCount">0</span>)</summary>
+        <div id="archivedList" class="saved-list"></div>
+      </details>
     </section>
 
     <section id="setupScreen" class="screen">
       <button class="back" data-screen="menuScreen">← Back</button>
       <h2 id="setupTitle">New Inspection</h2>
-      <label>Inspection ID
-        <input id="inspectionId" placeholder="Example: NIIS-12345" autocomplete="off" />
+      <div id="setupClientNotice" class="notice hidden"></div>
+      <label>Inspection ID <span class="required">Required</span>
+        <input id="inspectionId" placeholder="Example: 2342467" autocomplete="off" />
       </label>
-      <label>Address
+      <label>Address <span class="required">Required</span>
         <input id="address" placeholder="Property address" autocomplete="street-address" />
+      </label>
+      <label>Insured / Business Name
+        <input id="insured" placeholder="Insured or business name" autocomplete="organization" />
       </label>
       <label>Inspector
         <input id="inspector" placeholder="Chris Roberts" autocomplete="name" />
@@ -58,11 +56,12 @@
       <div class="street-card">
         <div>
           <strong>Street View / Map Preview</strong>
-          <p>Uses the entered address to open Google Maps for a quick property check.</p>
+          <p>Open the property address in Google Maps before arrival.</p>
         </div>
         <button id="openMapBtn" class="secondary">Open Map</button>
       </div>
-      <button id="startBtn" class="primary">Start Inspection</button>
+      <div id="setupError" class="error hidden"></div>
+      <button id="startBtn" class="primary full">Start Inspection</button>
     </section>
 
     <section id="dashboardScreen" class="screen">
@@ -73,81 +72,64 @@
       <h2 id="dashTitle">Inspection</h2>
       <p id="dashMeta" class="muted"></p>
 
-      <div class="onedrive-mini-card">
-        <div>
-          <strong>☁ Save Destination: OneDrive → NIIS</strong>
-          <p class="muted">Tap Finish & Export, then choose the NIIS folder in the Save window. No Microsoft app setup is required.</p>
-        </div>
-      </div>
-
       <div class="progress-wrap">
-        <div class="progress-label"><span id="progressText">0/0 complete</span><span id="readyText">Not ready</span></div>
+        <div class="progress-label"><span id="progressText">0/0 sections complete</span><span id="readyText">In progress</span></div>
         <div class="progress"><div id="progressBar"></div></div>
       </div>
 
-      <div id="obsNotice" class="notice hidden">
-        <strong>OBS exterior-only workflow.</strong> Interior photos and sketch are hidden for this inspection type.
+      <div id="preferredNotice" class="notice hidden">
+        <strong>Preferred Reports commercial workflow.</strong><br>
+        Work in any order. Section buttons change from red → yellow → green as you complete them. Photo export order is Front → Exterior → Interior → Hazards / Recommendations → Supporting Attachments.
       </div>
 
-      <h3>Inspection Photo Checklist</h3>
-      <div class="notice smart-checklist-note"><strong>Smart checklist:</strong> For items that may not exist at the property, choose <strong>Present</strong> or <strong>None / Not Applicable</strong>. The Departure Check will only require photos when the item is present.</div>
-      <p class="muted checklist-help">Stay on each checklist item and take as many pictures as needed. Tap <strong>Next Checklist Item</strong> only when you are ready to move on.</p>
-      <div id="roofHazardRule" class="notice"><strong>Roof hazard rule:</strong> If a roof hazard is present, take <strong>3 close-up photos</strong> of the hazard and <strong>1 further-back photo</strong> showing it in context.</div>
-      <div id="photoList" class="checklist"></div>
+      <div id="sectionList" class="section-list"></div>
 
-      <section id="takenPhotosSection" class="taken-photos-section" aria-live="polite">
-        <div class="taken-photos-heading">
-          <h3>Photos Taken</h3>
-          <span id="takenPhotosCount" class="taken-photos-count">0 photos</span>
-        </div>
-        <p class="muted taken-photos-help">Every saved picture from Exterior and Interior appears here automatically so you can scroll down and quickly review everything you have already taken.</p>
-        <div id="takenPhotosGallery" class="taken-photos-gallery"></div>
-      </section>
-
-      <div class="actions">
-        <button id="takeNextBtn" class="primary">Take Next Photo</button>
-        <button id="departureBtn" class="secondary">AI Departure Check</button>
-        <button id="finishExportBtn" class="primary finish-export-btn">✓ Finish & Export Inspection</button>
-        <p id="exportStatus" class="export-status hidden" role="status" aria-live="polite"></p>
-        <button id="exportBtn" class="secondary">Export Report Only</button>
+      <div class="actions sticky-actions">
+        <button id="departureBtn" class="secondary">Final Departure Check</button>
+        <button id="finishExportBtn" class="primary">Finish & Export ZIP</button>
       </div>
     </section>
 
-    <section id="cameraScreen" class="screen">
-      <button class="back" data-screen="dashboardScreen">← Back</button>
-      <h2 id="photoTitle">Photo</h2>
-      <p id="photoHelp" class="muted"></p>
-      <div class="notice auto-quality-note"><strong>Auto quality mode is ON.</strong> Passing photos save automatically and stay on the current checklist item so you can take as many pictures as needed. Tap Next Checklist Item only when you are ready to move on.</div>
-      <div class="capture-box">
-        <input id="cameraInput" class="camera-native-input" type="file" accept="image/*" capture="environment" />
-        <button id="takePhotoBtn" class="primary camera-trigger">📷 Take Photo</button>
-        <p id="cameraHint" class="muted camera-hint">Tap to open the rear camera.</p>
-        <img id="previewImg" alt="Preview" class="hidden" />
+    <section id="sectionScreen" class="screen">
+      <div class="dash-top">
+        <button class="back" data-screen="dashboardScreen">← Sections</button>
+        <button id="sectionCompleteBtn" class="secondary">Mark Complete</button>
       </div>
-      <div id="qualityBox" class="quality hidden"></div>
-      <label class="note-label">Photo note / reason if missed
+      <h2 id="sectionTitle">Section</h2>
+      <p id="sectionHelp" class="muted"></p>
+      <div id="sectionForm"></div>
+    </section>
+
+    <section id="photoPreviewScreen" class="screen">
+      <button class="back" id="cancelPreviewBtn">← Cancel</button>
+      <h2 id="photoPreviewTitle">Review Photo</h2>
+      <p class="muted">Review the full image before saving it to this item.</p>
+      <div class="photo-preview-wrap">
+        <img id="previewImg" alt="Captured photo preview" />
+      </div>
+      <label>Photo note
         <textarea id="photoNote" rows="3" placeholder="Optional note"></textarea>
       </label>
+      <div id="qualityBox" class="quality hidden"></div>
       <div class="actions">
-        <button id="okPhotoBtn" class="primary" disabled>OK / Save Photo</button>
+        <button id="usePhotoBtn" class="primary">Use Photo</button>
         <button id="retakeBtn" class="secondary">Retake</button>
-        <button id="nextChecklistBtn" class="secondary">Next Checklist Item →</button>
-        <button id="markMissingBtn" class="warning">Cannot Get Photo</button>
       </div>
     </section>
 
     <section id="reviewScreen" class="screen">
       <button class="back" data-screen="dashboardScreen">← Dashboard</button>
-      <h2>AI Departure Check</h2>
+      <h2>Final Departure Check</h2>
       <div id="reviewResults" class="review"></div>
-      <button class="primary" data-screen="dashboardScreen">Done</button>
+      <button class="primary full" data-screen="dashboardScreen">Done</button>
     </section>
   </main>
 
-  <template id="savedTemplate">
-    <button class="saved-item"></button>
-  </template>
+  <input id="cameraInput" class="hidden-picker" type="file" accept="image/*" capture="environment" />
 
-  <script src="app.js?v=2.1.0-build-021"></script>
+  <div id="toast" class="toast hidden" role="status"></div>
+
+  <script src="jszip.min.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
