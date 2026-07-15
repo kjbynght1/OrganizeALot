@@ -768,9 +768,32 @@ function startInspection(){
   renderDashboard(); show('dashboardScreen');
 }
 
+function getSetupAddress(){
+  return $('address').value.trim();
+}
+
+function requireSetupAddress(){
+  const address=getSetupAddress();
+  if(address) return address;
+  $('setupError').textContent='Enter the property address first, then open navigation.';
+  $('setupError').classList.remove('hidden');
+  $('address').focus();
+  return '';
+}
+
 function openMap(){
-  const q=encodeURIComponent($('address').value.trim());
-  if(q) window.open(`https://www.google.com/maps/search/?api=1&query=${q}`,'_blank');
+  const address=requireSetupAddress();
+  if(!address) return;
+  const q=encodeURIComponent(address);
+  window.open(`https://www.google.com/maps/search/?api=1&query=${q}`,'_blank');
+}
+
+function openWaze(){
+  const address=requireSetupAddress();
+  if(!address) return;
+  $('setupError').classList.add('hidden');
+  const q=encodeURIComponent(address);
+  window.open(`https://waze.com/ul?q=${q}&navigate=yes&utm_source=organizealot`,'_blank');
 }
 
 function toggleSectionComplete(){
@@ -785,6 +808,7 @@ document.querySelectorAll('.tile').forEach(b=>b.addEventListener('click',()=>sta
 document.querySelectorAll('[data-screen]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.screen)));
 $('startBtn').addEventListener('click',startInspection);
 $('openMapBtn').addEventListener('click',openMap);
+$('openWazeBtn').addEventListener('click',openWaze);
 $('saveBtn').addEventListener('click',()=>saveCurrent(true));
 $('sectionCompleteBtn').addEventListener('click',toggleSectionComplete);
 $('cameraInput').addEventListener('change',onCameraFile);

@@ -1,6 +1,13 @@
-# OrganizeALot v2.1.0 Build 022
+# OrganizeALot v2.1.0 Build 023
 
-## New in Build 022
+## New in Build 023
+
+- Added a **Navigate with Waze** button beside the existing map preview controls.
+- Uses the inspection address already entered in OrganizeALot and starts Waze navigation to that destination.
+- If Waze is installed on the phone, the Waze app opens; otherwise the Waze web experience is used.
+- Added a clear address-required message if navigation is tapped before an address is entered.
+
+## Preserved from Build 022
 
 - Added a separate **Preferred Reports Commercial** inspection workflow.
 - Added large section buttons with **red → yellow → green** completion states.
