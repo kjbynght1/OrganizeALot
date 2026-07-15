@@ -1,0 +1,16 @@
+{
+  "name": "organizealot-build023-android",
+  "version": "2.1.0-build023",
+  "private": true,
+  "scripts": {
+    "sync": "npx cap sync android",
+    "copy": "npx cap copy android"
+  },
+  "dependencies": {
+    "@capacitor/core": "8.4.2"
+  },
+  "devDependencies": {
+    "@capacitor/android": "8.4.2",
+    "@capacitor/cli": "8.4.2"
+  }
+}
